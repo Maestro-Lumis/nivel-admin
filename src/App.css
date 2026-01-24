@@ -1,38 +1,179 @@
-.App {
-  text-align: center;
+/* src/App.css */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+  sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #EAE2D6;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
+.loading-screen {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: #EAE2D6;
+  color: #867666;
 }
 
-.App-header {
-  background-color: #282c34;
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid #D5C3AA;
+  border-top-color: #E1B80D;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-screen p {
+  margin-top: 20px;
+  font-size: 18px;
+  color: #867666;
+}
+
+.app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+.navbar {
+  background: #867666;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav-content {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
+  gap: 20px;
+}
+
+.nav-title {
+  font-size: 24px;
+  color: #EAE2D6;
+  margin: 0;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.nav-center {
+  display: flex;
+  gap: 12px;
+  flex: 1;
   justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
 }
 
-.App-link {
-  color: #61dafb;
+.nav-tab {
+  background: transparent;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #EAE2D6;
+  transition: all 0.2s;
+  white-space: nowrap;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
+.nav-tab:hover {
+  background: rgba(234, 226, 214, 0.1);
+}
+
+.nav-tab.active {
+  background: #E1B80D;
+  color: #333;
+  box-shadow: 0 4px 12px rgba(225, 184, 13, 0.3);
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.user-email {
+  color: #EAE2D6;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.btn-logout {
+  background: #E1B80D;
+  color: #333;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-logout:hover {
+  background: #c9a00b;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(225, 184, 13, 0.3);
+}
+
+.main-content {
+  flex: 1;
+  padding: 20px 0;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .nav-content {
+    flex-wrap: wrap;
+    justify-content: center;
   }
-  to {
-    transform: rotate(360deg);
+
+  .nav-title {
+    width: 100%;
+    text-align: center;
+  }
+
+  .nav-center {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .nav-right {
+    order: 2;
+  }
+}
+
+@media (max-width: 768px) {
+  .user-email {
+    display: none;
+  }
+
+  .nav-tab {
+    padding: 8px 16px;
+    font-size: 14px;
   }
 }
