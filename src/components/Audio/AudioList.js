@@ -1,86 +1,87 @@
-// src/components/Vocabulario/VocabularioList.js
+// src/components/Audio/AudioList.js
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import VocabularioForm from './VocabularioForm';
-import './Vocabulario.css';
+import AudioForm from './AudioForm';
+import './Audio.css'
 
 const NIVELES = ['A1', 'A2', 'B1', 'B2'];
 
-function VocabularioList() {
-    const [words, setWords] = useState([]);
+function AudioList() {
+    const [audios, setAudios] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedNivel, setSelectedNivel] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [showForm, setShowForm] = useState(false);
-    const [editingWord, setEditingWord] = useState(null);
+    const [editingAudio, setEditingAudio] = useState(null);
 
     useEffect(() => {
-        loadWords();
+        loadAudios();
     }, [selectedNivel]);
 
-    const loadWords = async () => {
+    const loadAudios = async () => {
         setLoading(true);
         try {
             let q;
             if (selectedNivel) {
                 q = query(
-                    collection(db, 'vocabulario'),
+                    collection(db, 'audio'),
                     where('nivel', '==', selectedNivel)
                 );
             } else {
-                q = query(collection(db, 'vocabulario'));
+                q = query(collection(db, 'audio'));
             }
 
             const querySnapshot = await getDocs(q);
-            const wordsData = [];
+            const audiosData = [];
             querySnapshot.forEach((doc) => {
-                wordsData.push({ id: doc.id, ...doc.data() });
+                audiosData.push({ id: doc.id, ...doc.data() });
             });
 
-            wordsData.sort((a, b) => a.es.localeCompare(b.es));
+            // Сортируем в JavaScript
+            audiosData.sort((a, b) => a.pregunta.localeCompare(b.pregunta));
 
-            setWords(wordsData);
-            console.log(`Cargadas ${wordsData.length} palabras`);
+            setAudios(audiosData);
+            console.log(`Cargados ${audiosData.length} audios`);
         } catch (error) {
-            console.error('Error al cargar palabras:', error);
-            alert('Error al cargar palabras: ' + error.message);
+            console.error('Error al cargar audios:', error);
+            alert('Error al cargar audios: ' + error.message);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleDelete = async (wordId, wordEs) => {
-        if (!window.confirm(`¿Eliminar "${wordEs}"?`)) return;
+    const handleDelete = async (audioId, pregunta) => {
+        if (!window.confirm(`¿Eliminar "${pregunta}"?`)) return;
 
         try {
-            await deleteDoc(doc(db, 'vocabulario', wordId));
-            console.log('Palabra eliminada:', wordId);
-            loadWords();
+            await deleteDoc(doc(db, 'audio', audioId));
+            console.log('Audio eliminado:', audioId);
+            loadAudios();
         } catch (error) {
             console.error('Error al eliminar:', error);
             alert('Error al eliminar: ' + error.message);
         }
     };
 
-    const handleEdit = (word) => {
-        setEditingWord(word);
+    const handleEdit = (audio) => {
+        setEditingAudio(audio);
         setShowForm(true);
     };
 
     const handleFormClose = () => {
         setShowForm(false);
-        setEditingWord(null);
-        loadWords();
+        setEditingAudio(null);
+        loadAudios();
     };
 
-    const filteredWords = words.filter(word =>
-        word.es.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        word.ru.toLowerCase().includes(searchTerm.toLowerCase())
+    const filteredAudios = audios.filter(audio =>
+        audio.pregunta.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (audio.audioUrl && audio.audioUrl.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     const getCountByNivel = (nivel) => {
-        return words.filter(w => w.nivel === nivel).length;
+        return audios.filter(a => a.nivel === nivel).length;
     };
 
     return (
@@ -98,7 +99,7 @@ function VocabularioList() {
                     >
                         <span className="nivel-indicator all"></span>
                         <span className="nivel-name">Todos</span>
-                        <span className="nivel-count">{words.length}</span>
+                        <span className="nivel-count">{audios.length}</span>
                     </div>
 
                     {NIVELES.map(nivel => (
@@ -115,63 +116,75 @@ function VocabularioList() {
                 </div>
             </div>
 
-            {/* Main Content */}
+            {/* Main Panel */}
             <div className="main-panel">
                 <div className="panel-header">
                     <div className="header-top">
-                        <h1>Vocabulario</h1>
+                        <h1>Audio</h1>
                         <button className="btn-add" onClick={() => setShowForm(true)}>
-                            + Añadir palabra
+                            + Añadir audio
                         </button>
                     </div>
 
                     <div className="search-bar">
                         <input
                             type="text"
-                            placeholder="Buscar palabra en español o ruso..."
+                            placeholder="Buscar por pregunta o URL..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="search-input"
                         />
                         <span className="results-info">
-              {filteredWords.length} palabras
-            </span>
+            {filteredAudios.length} audios
+          </span>
                     </div>
                 </div>
 
                 {loading ? (
-                    <div className="loading">Cargando palabras...</div>
+                    <div className="loading">Cargando audios...</div>
                 ) : (
                     <div className="content-area">
                         <table className="data-table">
                             <thead>
                             <tr>
                                 <th>Nivel</th>
-                                <th>Español</th>
-                                <th>Русский</th>
+                                <th>Pregunta</th>
+                                <th>Audio URL</th>
+                                <th>Opciones</th>
                                 <th>Acciones</th>
                             </tr>
                             </thead>
                             <tbody>
-                            {filteredWords.map(word => (
-                                <tr key={word.id}>
+                            {filteredAudios.map(audio => (
+                                <tr key={audio.id}>
                                     <td>
-                      <span className={`badge nivel-${word.nivel.toLowerCase()}`}>
-                        {word.nivel}
-                      </span>
+                    <span className={`badge nivel-${audio.nivel.toLowerCase()}`}>
+                      {audio.nivel}
+                    </span>
                                     </td>
-                                    <td className="word-es">{word.es}</td>
-                                    <td className="word-ru">{word.ru}</td>
+                                    <td className="pregunta-cell">{audio.pregunta}</td>
+                                    <td className="audio-url">
+                                        {audio.audioUrl ? (
+                                            <a href={audio.audioUrl} target="_blank" rel="noopener noreferrer">
+                                                Ver audio
+                                            </a>
+                                        ) : (
+                                            <span className="no-audio">Sin audio</span>
+                                        )}
+                                    </td>
+                                    <td className="opciones-count">
+                                        {audio.opciones?.length || 0} opciones
+                                    </td>
                                     <td className="actions">
                                         <button
                                             className="btn-edit"
-                                            onClick={() => handleEdit(word)}
+                                            onClick={() => handleEdit(audio)}
                                         >
                                             Editar
                                         </button>
                                         <button
                                             className="btn-delete"
-                                            onClick={() => handleDelete(word.id, word.es)}
+                                            onClick={() => handleDelete(audio.id, audio.pregunta)}
                                         >
                                             Eliminar
                                         </button>
@@ -181,11 +194,11 @@ function VocabularioList() {
                             </tbody>
                         </table>
 
-                        {filteredWords.length === 0 && (
+                        {filteredAudios.length === 0 && (
                             <div className="no-results">
                                 {searchTerm
-                                    ? 'No se encontraron palabras'
-                                    : 'No hay palabras todavía'}
+                                    ? 'No se encontraron audios'
+                                    : 'No hay audios todavía'}
                             </div>
                         )}
                     </div>
@@ -193,8 +206,8 @@ function VocabularioList() {
             </div>
 
             {showForm && (
-                <VocabularioForm
-                    word={editingWord}
+                <AudioForm
+                    audio={editingAudio}
                     onClose={handleFormClose}
                 />
             )}
@@ -202,4 +215,4 @@ function VocabularioList() {
     );
 }
 
-export default VocabularioList;
+export default AudioList;
