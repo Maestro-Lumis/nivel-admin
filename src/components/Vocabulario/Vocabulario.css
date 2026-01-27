@@ -436,7 +436,6 @@
     cursor: not-allowed;
 }
 
-/* Autocomplete Suggestions */
 .autocomplete-group {
     position: relative;
 }
@@ -504,6 +503,31 @@
     border-radius: 8px;
     font-size: 11px;
     font-weight: 600;
+}
+
+/* Error */
+.input-error {
+    border-color: #d32f2f !important;
+    background-color: #ffebee !important;
+}
+
+.input-error:focus {
+    border-color: #b71c1c !important;
+}
+
+.error-message {
+    display: block;
+    color: #d32f2f;
+    font-size: 12px;
+    margin-top: 4px;
+    font-weight: 600;
+    animation: shake 0.3s;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
 }
 
 /* Responsive */

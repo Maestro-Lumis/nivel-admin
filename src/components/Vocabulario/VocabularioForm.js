@@ -4,7 +4,7 @@ import { collection, addDoc, updateDoc, doc, getDocs, query } from 'firebase/fir
 import { db } from '../../firebase/config';
 import './Vocabulario.css';
 
-const NIVELES = ['A1', 'A2', 'B1', 'B2'];
+const NIVELES = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
 function VocabularioForm({ word, onClose }) {
     const [nivel, setNivel] = useState('A1');
@@ -16,6 +16,10 @@ function VocabularioForm({ word, onClose }) {
     const [ruSuggestions, setRuSuggestions] = useState([]);
     const [showEsSuggestions, setShowEsSuggestions] = useState(false);
     const [showRuSuggestions, setShowRuSuggestions] = useState(false);
+    const [errors, setErrors] = useState({
+        es: false,
+        ru: false
+    });
 
     // Загрузить все слова при монтировании
     useEffect(() => {
@@ -51,7 +55,7 @@ function VocabularioForm({ word, onClose }) {
 
         if (value.length >= 3) {
             const suggestions = allWords.filter(w =>
-                w.es.toLowerCase().includes(value.toLowerCase()) &&
+                w.es.toLowerCase().startsWith(value.toLowerCase()) &&
                 w.es.toLowerCase() !== value.toLowerCase()
             ).slice(0, 5);
 
@@ -68,7 +72,7 @@ function VocabularioForm({ word, onClose }) {
 
         if (value.length >= 3) {
             const suggestions = allWords.filter(w =>
-                w.ru.toLowerCase().includes(value.toLowerCase()) &&
+                w.ru.toLowerCase().startsWith(value.toLowerCase()) &&
                 w.ru.toLowerCase() !== value.toLowerCase()
             ).slice(0, 5);
 
@@ -81,6 +85,25 @@ function VocabularioForm({ word, onClose }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // Проверка на пустые поля
+        const newErrors = {
+            es: !es.trim(),
+            ru: !ru.trim()
+        };
+
+        setErrors(newErrors);
+
+        // Если есть ошибки, показываем уведомление и блокируем отправку
+        if (newErrors.es || newErrors.ru) {
+            const emptyFields = [];
+            if (newErrors.es) emptyFields.push('Español');
+            if (newErrors.ru) emptyFields.push('Русский');
+
+            alert(`Por favor, complete los siguientes campos: ${emptyFields.join(', ')}`);
+            return;
+        }
+
         setLoading(true);
 
         const wordData = {
@@ -136,14 +159,22 @@ function VocabularioForm({ word, onClose }) {
                         <input
                             type="text"
                             value={es}
-                            onChange={(e) => handleEsChange(e.target.value)}
+                            onChange={(e) => {
+                                handleEsChange(e.target.value);
+                                if (errors.es && e.target.value.trim()) {
+                                    setErrors({...errors, es: false});
+                                }
+                            }}
                             onFocus={() => es.length >= 3 && setShowEsSuggestions(esSuggestions.length > 0)}
                             onBlur={() => setTimeout(() => setShowEsSuggestions(false), 200)}
                             placeholder="la casa"
-                            required
                             disabled={loading}
                             autoComplete="off"
+                            className={errors.es ? 'input-error' : ''}
                         />
+                        {errors.es && (
+                            <span className="error-message">Este campo es obligatorio</span>
+                        )}
                         {showEsSuggestions && (
                             <div className="suggestions-dropdown">
                                 <div className="suggestions-header">
@@ -177,14 +208,22 @@ function VocabularioForm({ word, onClose }) {
                         <input
                             type="text"
                             value={ru}
-                            onChange={(e) => handleRuChange(e.target.value)}
+                            onChange={(e) => {
+                                handleRuChange(e.target.value);
+                                if (errors.ru && e.target.value.trim()) {
+                                    setErrors({...errors, ru: false});
+                                }
+                            }}
                             onFocus={() => ru.length >= 3 && setShowRuSuggestions(ruSuggestions.length > 0)}
                             onBlur={() => setTimeout(() => setShowRuSuggestions(false), 200)}
                             placeholder="дом"
-                            required
                             disabled={loading}
                             autoComplete="off"
+                            className={errors.ru ? 'input-error' : ''}
                         />
+                        {errors.ru && (
+                            <span className="error-message">Это поле обязательно</span>
+                        )}
                         {showRuSuggestions && (
                             <div className="suggestions-dropdown">
                                 <div className="suggestions-header">
