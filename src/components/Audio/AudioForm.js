@@ -1,11 +1,13 @@
 // src/components/Audio/AudioForm.js
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../../firebase/config';
+import { db } from '../../firebase/config';
 import './Audio.css'
 
 const NIVELES = ['A1', 'A2', 'B1', 'B2'];
+
+const CLOUDINARY_CLOUD_NAME = process.env.REACT_APP_CLOUDINARY_CLOUD_NAME;
+const CLOUDINARY_UPLOAD_PRESET = process.env.REACT_APP_CLOUDINARY_UPLOAD_PRESET;
 
 function AudioForm({ audio, onClose }) {
     const [nivel, setNivel] = useState('A1');
@@ -45,11 +47,50 @@ function AudioForm({ audio, onClose }) {
         }
     }, [audio]);
 
+    // Проверка конфигурации
+    useEffect(() => {
+        if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+            console.error('Cloudinary не настроен! Проверьте .env файл');
+        }
+    }, []);
+
+    const uploadToCloudinary = async (file) => {
+        if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+            throw new Error('Cloudinary no está configurado. Verifique el archivo .env');
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+        formData.append('folder', 'audio');
+        formData.append('resource_type', 'video');
+
+        try {
+            const response = await fetch(
+                `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`,
+                {
+                    method: 'POST',
+                    body: formData
+                }
+            );
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('✓ Upload success:', data.secure_url);
+            return data.secure_url;
+        } catch (error) {
+            console.error('✗ Upload error:', error);
+            throw error;
+        }
+    };
+
     const handleFileUpload = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
-
-        console.log('File selected:', file.name, file.type, file.size);
 
         if (!file.type.startsWith('audio/')) {
             alert('Por favor, seleccione un archivo de audio válido');
@@ -64,20 +105,8 @@ function AudioForm({ audio, onClose }) {
         setUploading(true);
 
         try {
-            const timestamp = Date.now();
-            const extension = file.name.split('.').pop() || 'mp3';
-            const fileName = `audio_${nivel}_${timestamp}.${extension}`;
-            const storageRef = ref(storage, `audio/${fileName}`);
-
-            console.log('Uploading to:', `audio/${fileName}`);
-
-            await uploadBytes(storageRef, file);
-            console.log('Upload complete, getting URL...');
-
-            const downloadUrl = await getDownloadURL(storageRef);
-            console.log('Download URL:', downloadUrl);
-
-            setAudioUrl(downloadUrl);
+            const url = await uploadToCloudinary(file);
+            setAudioUrl(url);
             setRecordedAudioUrl(null);
             setAudioBlob(null);
 
@@ -87,8 +116,8 @@ function AudioForm({ audio, onClose }) {
 
             alert('✓ Archivo subido exitosamente');
         } catch (error) {
-            console.error('Error completo:', error);
-            alert(`Error al subir archivo: ${error.message}\n\nVerifique:\n1. Reglas de Storage en Firebase\n2. Permisos de la cuenta`);
+            console.error('Upload error:', error);
+            alert(`Error: ${error.message}`);
         } finally {
             setUploading(false);
         }
@@ -96,7 +125,6 @@ function AudioForm({ audio, onClose }) {
 
     const startRecording = async () => {
         try {
-            console.log('Requesting microphone access...');
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     echoCancellation: true,
@@ -105,14 +133,8 @@ function AudioForm({ audio, onClose }) {
                 }
             });
 
-            console.log('Microphone access granted');
-
-            // Проверяем поддержку mime types
             const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' :
-                MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' :
-                    'audio/wav';
-
-            console.log('Using mime type:', mimeType);
+                MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/wav';
 
             mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
             audioChunksRef.current = [];
@@ -120,35 +142,23 @@ function AudioForm({ audio, onClose }) {
             mediaRecorderRef.current.ondataavailable = (event) => {
                 if (event.data.size > 0) {
                     audioChunksRef.current.push(event.data);
-                    console.log('Audio chunk received:', event.data.size, 'bytes');
                 }
             };
 
             mediaRecorderRef.current.onstop = () => {
-                console.log('Recording stopped, total chunks:', audioChunksRef.current.length);
-
                 if (audioChunksRef.current.length === 0) {
-                    alert('Error: No se grabó audio. Intente nuevamente.');
+                    alert('Error: No se grabó audio.');
                     stream.getTracks().forEach(track => track.stop());
                     return;
                 }
 
                 const blob = new Blob(audioChunksRef.current, { type: mimeType });
-                console.log('Created blob:', blob.size, 'bytes');
-
                 setAudioBlob(blob);
-                const tempUrl = URL.createObjectURL(blob);
-                setRecordedAudioUrl(tempUrl);
-
+                setRecordedAudioUrl(URL.createObjectURL(blob));
                 stream.getTracks().forEach(track => track.stop());
             };
 
-            mediaRecorderRef.current.onerror = (event) => {
-                console.error('MediaRecorder error:', event);
-                alert('Error durante la grabación: ' + event.error);
-            };
-
-            mediaRecorderRef.current.start(100); // Collect data every 100ms
+            mediaRecorderRef.current.start(100);
             setIsRecording(true);
             setRecordingTime(0);
 
@@ -157,14 +167,12 @@ function AudioForm({ audio, onClose }) {
             }, 1000);
 
         } catch (error) {
-            console.error('Error accessing microphone:', error);
-            alert(`No se pudo acceder al micrófono.\n\nError: ${error.message}\n\nVerifique los permisos en su navegador.`);
+            alert(`No se pudo acceder al micrófono: ${error.message}`);
         }
     };
 
     const stopRecording = () => {
         if (mediaRecorderRef.current && isRecording) {
-            console.log('Stopping recording...');
             mediaRecorderRef.current.stop();
             setIsRecording(false);
             clearInterval(timerRef.current);
@@ -172,32 +180,19 @@ function AudioForm({ audio, onClose }) {
     };
 
     const saveRecordedAudio = async () => {
-        if (!audioBlob) {
-            alert('Error: No hay audio grabado');
-            return;
-        }
+        if (!audioBlob) return;
 
-        console.log('Saving recorded audio, blob size:', audioBlob.size);
         setUploading(true);
 
         try {
-            const timestamp = Date.now();
             const extension = audioBlob.type.includes('webm') ? 'webm' :
                 audioBlob.type.includes('mp4') ? 'm4a' : 'wav';
-            const fileName = `audio_recorded_${nivel}_${timestamp}.${extension}`;
-            const storageRef = ref(storage, `audio/${fileName}`);
+            const fileName = `recording_${Date.now()}.${extension}`;
+            const file = new File([audioBlob], fileName, { type: audioBlob.type });
 
-            console.log('Uploading recording to:', `audio/${fileName}`);
+            const url = await uploadToCloudinary(file);
+            setAudioUrl(url);
 
-            await uploadBytes(storageRef, audioBlob);
-            console.log('Upload complete, getting URL...');
-
-            const downloadUrl = await getDownloadURL(storageRef);
-            console.log('Download URL:', downloadUrl);
-
-            setAudioUrl(downloadUrl);
-
-            // Limpieza
             if (recordedAudioUrl) {
                 URL.revokeObjectURL(recordedAudioUrl);
             }
@@ -208,10 +203,9 @@ function AudioForm({ audio, onClose }) {
                 setErrors({...errors, audioUrl: false});
             }
 
-            alert('✓ Audio grabado guardado exitosamente');
+            alert('✓ Audio guardado exitosamente');
         } catch (error) {
-            console.error('Error saving recording:', error);
-            alert(`Error al guardar audio: ${error.message}\n\nVerifique las reglas de Storage en Firebase.`);
+            alert(`Error: ${error.message}`);
         } finally {
             setUploading(false);
         }
@@ -245,8 +239,7 @@ function AudioForm({ audio, onClose }) {
 
     const removeOpcion = (index) => {
         if (opciones.length > 2) {
-            const newOpciones = opciones.filter((_, i) => i !== index);
-            setOpciones(newOpciones);
+            setOpciones(opciones.filter((_, i) => i !== index));
         } else {
             alert('Debe haber al menos 2 opciones');
         }
@@ -264,27 +257,22 @@ function AudioForm({ audio, onClose }) {
         setErrors(newErrors);
 
         const emptyFields = [];
-        if (newErrors.audioUrl) emptyFields.push('Audio (grabe o suba un archivo)');
+        if (newErrors.audioUrl) emptyFields.push('Audio');
         if (newErrors.pregunta) emptyFields.push('Pregunta');
-
-        const emptyOpciones = newErrors.opciones.filter(e => e).length;
-        if (emptyOpciones > 0) {
-            emptyFields.push(`${emptyOpciones} opción(es) de respuesta`);
-        }
+        if (newErrors.opciones.some(e => e)) emptyFields.push('Opciones');
 
         if (emptyFields.length > 0) {
-            alert(`Por favor, complete los siguientes campos:\n${emptyFields.join('\n')}`);
+            alert(`Complete: ${emptyFields.join(', ')}`);
+            return;
+        }
+
+        const hasCorrectAnswer = opciones.some(op => op.correcta);
+        if (!hasCorrectAnswer) {
+            alert('Marque una opción como correcta');
             return;
         }
 
         setLoading(true);
-
-        const hasCorrectAnswer = opciones.some(op => op.correcta);
-        if (!hasCorrectAnswer) {
-            alert('Debe marcar una opción como correcta');
-            setLoading(false);
-            return;
-        }
 
         const audioData = {
             nivel: nivel.toUpperCase(),
@@ -299,17 +287,14 @@ function AudioForm({ audio, onClose }) {
         try {
             if (audio) {
                 await updateDoc(doc(db, 'audio', audio.id), audioData);
-                console.log('Audio actualizado:', audio.id);
-                alert('Audio actualizado exitosamente');
+                alert('Audio actualizado');
             } else {
-                const docRef = await addDoc(collection(db, 'audio'), audioData);
-                console.log('Audio añadido:', docRef.id);
-                alert('Audio añadido exitosamente');
+                await addDoc(collection(db, 'audio'), audioData);
+                alert('Audio añadido');
             }
             onClose();
         } catch (error) {
-            console.error('Error al guardar:', error);
-            alert('Error al guardar: ' + error.message);
+            alert('Error: ' + error.message);
         } finally {
             setLoading(false);
         }
@@ -332,14 +317,8 @@ function AudioForm({ audio, onClose }) {
                 <form onSubmit={handleSubmit} className="audio-form">
                     <div className="form-group">
                         <label>Nivel:</label>
-                        <select
-                            value={nivel}
-                            onChange={(e) => setNivel(e.target.value)}
-                            disabled={loading}
-                        >
-                            {NIVELES.map(n => (
-                                <option key={n} value={n}>{n}</option>
-                            ))}
+                        <select value={nivel} onChange={(e) => setNivel(e.target.value)} disabled={loading}>
+                            {NIVELES.map(n => <option key={n} value={n}>{n}</option>)}
                         </select>
                     </div>
 
@@ -349,13 +328,8 @@ function AudioForm({ audio, onClose }) {
                         <div className="audio-record-section">
                             <h4>Opción 1: Grabar voz</h4>
                             {!isRecording && !recordedAudioUrl && (
-                                <button
-                                    type="button"
-                                    className="btn-record"
-                                    onClick={startRecording}
-                                    disabled={uploading || loading}
-                                >
-                                    🎤 Comenzar grabación
+                                <button type="button" className="btn-record" onClick={startRecording} disabled={uploading || loading}>
+                                    Comenzar grabación
                                 </button>
                             )}
 
@@ -365,36 +339,20 @@ function AudioForm({ audio, onClose }) {
                                         <span className="recording-dot"></span>
                                         Grabando... {formatTime(recordingTime)}
                                     </div>
-                                    <button
-                                        type="button"
-                                        className="btn-stop-record"
-                                        onClick={stopRecording}
-                                    >
-                                        Detener
+                                    <button type="button" className="btn-stop-record" onClick={stopRecording}>
+                                        ⏹️ Detener
                                     </button>
                                 </div>
                             )}
 
                             {recordedAudioUrl && (
                                 <div className="recorded-audio-preview">
-                                    <audio controls src={recordedAudioUrl} className="audio-preview">
-                                        Tu navegador no soporta el elemento de audio.
-                                    </audio>
+                                    <audio controls src={recordedAudioUrl} className="audio-preview" />
                                     <div className="recorded-actions">
-                                        <button
-                                            type="button"
-                                            className="btn-save-recording"
-                                            onClick={saveRecordedAudio}
-                                            disabled={uploading}
-                                        >
-                                            ✓ Guardar grabación
+                                        <button type="button" className="btn-save-recording" onClick={saveRecordedAudio} disabled={uploading}>
+                                            ✓ Guardar
                                         </button>
-                                        <button
-                                            type="button"
-                                            className="btn-cancel-recording"
-                                            onClick={cancelRecording}
-                                            disabled={uploading}
-                                        >
+                                        <button type="button" className="btn-cancel-recording" onClick={cancelRecording} disabled={uploading}>
                                             ✗ Cancelar
                                         </button>
                                     </div>
@@ -413,26 +371,18 @@ function AudioForm({ audio, onClose }) {
                                 id="audio-file-input"
                             />
                             <label htmlFor="audio-file-input" className="btn-upload">
-                                Seleccionar archivo de audio
+                                Seleccionar archivo
                             </label>
-                            {uploading && (
-                                <div className="upload-progress">
-                                    Subiendo archivo...
-                                </div>
-                            )}
+                            {uploading && <div className="upload-progress">Subiendo...</div>}
                         </div>
 
-                        {errors.audioUrl && (
-                            <span className="error-message">Debe grabar o subir un archivo de audio</span>
-                        )}
+                        {errors.audioUrl && <span className="error-message">Audio requerido</span>}
                     </div>
 
                     {audioUrl && !recordedAudioUrl && (
                         <div className="form-group">
-                            <label>Preview del audio guardado:</label>
-                            <audio controls src={audioUrl} className="audio-preview">
-                                Tu navegador no soporta el elemento de audio.
-                            </audio>
+                            <label>Preview:</label>
+                            <audio controls src={audioUrl} className="audio-preview" />
                         </div>
                     )}
 
@@ -447,17 +397,15 @@ function AudioForm({ audio, onClose }) {
                                     setErrors({...errors, pregunta: false});
                                 }
                             }}
-                            placeholder="¿Qué escuchaste en el audio?"
+                            placeholder="¿Qué escuchaste?"
                             disabled={loading}
                             className={errors.pregunta ? 'input-error' : ''}
                         />
-                        {errors.pregunta && (
-                            <span className="error-message">Este campo es obligatorio</span>
-                        )}
+                        {errors.pregunta && <span className="error-message">Campo obligatorio</span>}
                     </div>
 
                     <div className="form-group">
-                        <label>Opciones de respuesta:</label>
+                        <label>Opciones:</label>
                         <div className="opciones-list">
                             {opciones.map((opcion, index) => (
                                 <div key={index} className="opcion-item">
@@ -466,7 +414,7 @@ function AudioForm({ audio, onClose }) {
                                         type="text"
                                         value={opcion.texto}
                                         onChange={(e) => handleOpcionChange(index, 'texto', e.target.value)}
-                                        placeholder="Texto de la opción"
+                                        placeholder="Texto"
                                         disabled={loading}
                                         className={errors.opciones[index] ? 'input-error' : ''}
                                     />
@@ -483,25 +431,14 @@ function AudioForm({ audio, onClose }) {
                                 </div>
                             ))}
                         </div>
-                        {errors.opciones.some(e => e) && (
-                            <span className="error-message">Todas las opciones deben tener texto</span>
-                        )}
+                        {errors.opciones.some(e => e) && <span className="error-message">Complete todas las opciones</span>}
                     </div>
 
                     <div className="form-actions">
-                        <button
-                            type="button"
-                            className="btn-cancel"
-                            onClick={onClose}
-                            disabled={loading}
-                        >
+                        <button type="button" className="btn-cancel" onClick={onClose} disabled={loading}>
                             Cancelar
                         </button>
-                        <button
-                            type="submit"
-                            className="btn-save"
-                            disabled={loading || uploading || isRecording}
-                        >
+                        <button type="submit" className="btn-save" disabled={loading || uploading || isRecording}>
                             {loading ? 'Guardando...' : 'Guardar'}
                         </button>
                     </div>

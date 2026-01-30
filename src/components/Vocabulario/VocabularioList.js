@@ -9,6 +9,7 @@ const NIVELES = ['A1', 'A2', 'B1', 'B2'];
 
 function VocabularioList() {
     const [words, setWords] = useState([]);
+    const [allWords, setAllWords] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedNivel, setSelectedNivel] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
@@ -22,26 +23,27 @@ function VocabularioList() {
     const loadWords = async () => {
         setLoading(true);
         try {
-            let q;
+            // ВСЕГДА загружаем ВСЕ слова
+            const allQuery = query(collection(db, 'vocabulario'));
+            const allSnapshot = await getDocs(allQuery);
+            const allData = [];
+            allSnapshot.forEach((doc) => {
+                allData.push({ id: doc.id, ...doc.data() });
+            });
+            setAllWords(allData); // ← Сохраняем все
+
+            // Фильтруем для отображения
+            let displayData;
             if (selectedNivel) {
-                q = query(
-                    collection(db, 'vocabulario'),
-                    where('nivel', '==', selectedNivel)
-                );
+                displayData = allData.filter(w => w.nivel === selectedNivel);
             } else {
-                q = query(collection(db, 'vocabulario'));
+                displayData = allData;
             }
 
-            const querySnapshot = await getDocs(q);
-            const wordsData = [];
-            querySnapshot.forEach((doc) => {
-                wordsData.push({ id: doc.id, ...doc.data() });
-            });
+            displayData.sort((a, b) => a.es.localeCompare(b.es));
+            setWords(displayData);
 
-            wordsData.sort((a, b) => a.es.localeCompare(b.es));
-
-            setWords(wordsData);
-            console.log(`Cargadas ${wordsData.length} palabras`);
+            console.log(`Cargadas ${displayData.length} palabras (total: ${allData.length})`);
         } catch (error) {
             console.error('Error al cargar palabras:', error);
             alert('Error al cargar palabras: ' + error.message);
@@ -79,8 +81,9 @@ function VocabularioList() {
         word.ru.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    // ← ИСПРАВЛЕНО: считаем от allWords
     const getCountByNivel = (nivel) => {
-        return words.filter(w => w.nivel === nivel).length;
+        return allWords.filter(w => w.nivel === nivel).length;
     };
 
     return (
@@ -98,7 +101,7 @@ function VocabularioList() {
                     >
                         <span className="nivel-indicator all"></span>
                         <span className="nivel-name">Todos</span>
-                        <span className="nivel-count">{words.length}</span>
+                        <span className="nivel-count">{allWords.length}</span>
                     </div>
 
                     {NIVELES.map(nivel => (
@@ -134,8 +137,8 @@ function VocabularioList() {
                             className="search-input"
                         />
                         <span className="results-info">
-              {filteredWords.length} palabras
-            </span>
+                            {filteredWords.length} palabras
+                        </span>
                     </div>
                 </div>
 
@@ -156,9 +159,9 @@ function VocabularioList() {
                             {filteredWords.map(word => (
                                 <tr key={word.id}>
                                     <td>
-                      <span className={`badge nivel-${word.nivel.toLowerCase()}`}>
-                        {word.nivel}
-                      </span>
+                                        <span className={`badge nivel-${word.nivel.toLowerCase()}`}>
+                                            {word.nivel}
+                                        </span>
                                     </td>
                                     <td className="word-es">{word.es}</td>
                                     <td className="word-ru">{word.ru}</td>

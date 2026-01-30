@@ -9,6 +9,7 @@ const NIVELES = ['A1', 'A2', 'B1', 'B2'];
 
 function AudioList() {
     const [audios, setAudios] = useState([]);
+    const [allAudios, setAllAudios] = useState([]); // ← НОВОЕ: храним ВСЕ аудио
     const [loading, setLoading] = useState(true);
     const [selectedNivel, setSelectedNivel] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
@@ -22,27 +23,28 @@ function AudioList() {
     const loadAudios = async () => {
         setLoading(true);
         try {
-            let q;
+            // ВСЕГДА загружаем ВСЕ аудио для счетчиков
+            const allQuery = query(collection(db, 'audio'));
+            const allSnapshot = await getDocs(allQuery);
+            const allData = [];
+            allSnapshot.forEach((doc) => {
+                allData.push({ id: doc.id, ...doc.data() });
+            });
+            setAllAudios(allData);
+
+            // Фильтруем для отображения
+            let displayData;
             if (selectedNivel) {
-                q = query(
-                    collection(db, 'audio'),
-                    where('nivel', '==', selectedNivel)
-                );
+                displayData = allData.filter(a => a.nivel === selectedNivel);
             } else {
-                q = query(collection(db, 'audio'));
+                displayData = allData;
             }
 
-            const querySnapshot = await getDocs(q);
-            const audiosData = [];
-            querySnapshot.forEach((doc) => {
-                audiosData.push({ id: doc.id, ...doc.data() });
-            });
+            // Сортируем
+            displayData.sort((a, b) => a.pregunta.localeCompare(b.pregunta));
+            setAudios(displayData);
 
-            // Сортируем в JavaScript
-            audiosData.sort((a, b) => a.pregunta.localeCompare(b.pregunta));
-
-            setAudios(audiosData);
-            console.log(`Cargados ${audiosData.length} audios`);
+            console.log(`Cargados ${displayData.length} audios (total: ${allData.length})`);
         } catch (error) {
             console.error('Error al cargar audios:', error);
             alert('Error al cargar audios: ' + error.message);
@@ -81,7 +83,7 @@ function AudioList() {
     );
 
     const getCountByNivel = (nivel) => {
-        return audios.filter(a => a.nivel === nivel).length;
+        return allAudios.filter(a => a.nivel === nivel).length;
     };
 
     return (
@@ -99,7 +101,7 @@ function AudioList() {
                     >
                         <span className="nivel-indicator all"></span>
                         <span className="nivel-name">Todos</span>
-                        <span className="nivel-count">{audios.length}</span>
+                        <span className="nivel-count">{allAudios.length}</span>
                     </div>
 
                     {NIVELES.map(nivel => (
@@ -129,14 +131,14 @@ function AudioList() {
                     <div className="search-bar">
                         <input
                             type="text"
-                            placeholder="Buscar por pregunta o URL..."
+                            placeholder="Buscar por pregunta..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="search-input"
                         />
                         <span className="results-info">
-            {filteredAudios.length} audios
-          </span>
+                            {filteredAudios.length} audios
+                        </span>
                     </div>
                 </div>
 
@@ -149,7 +151,7 @@ function AudioList() {
                             <tr>
                                 <th>Nivel</th>
                                 <th>Pregunta</th>
-                                <th>Audio URL</th>
+                                <th>Audio</th>
                                 <th>Opciones</th>
                                 <th>Acciones</th>
                             </tr>
@@ -158,15 +160,15 @@ function AudioList() {
                             {filteredAudios.map(audio => (
                                 <tr key={audio.id}>
                                     <td>
-                    <span className={`badge nivel-${audio.nivel.toLowerCase()}`}>
-                      {audio.nivel}
-                    </span>
+                                        <span className={`badge nivel-${audio.nivel.toLowerCase()}`}>
+                                            {audio.nivel}
+                                        </span>
                                     </td>
                                     <td className="pregunta-cell">{audio.pregunta}</td>
                                     <td className="audio-url">
                                         {audio.audioUrl ? (
                                             <a href={audio.audioUrl} target="_blank" rel="noopener noreferrer">
-                                                Ver audio
+                                                Ver
                                             </a>
                                         ) : (
                                             <span className="no-audio">Sin audio</span>
