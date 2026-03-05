@@ -1,6 +1,6 @@
 // src/components/Audio/AudioForm.js
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, getDocs, query } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import './Audio.css'
 
@@ -22,7 +22,8 @@ function AudioForm({ audio, onClose }) {
     const [errors, setErrors] = useState({
         audioUrl: false,
         pregunta: false,
-        opciones: []
+        opciones: [],
+        noCorrect: false
     });
 
     const [uploading, setUploading] = useState(false);
@@ -33,6 +34,16 @@ function AudioForm({ audio, onClose }) {
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const timerRef = useRef(null);
+
+    // ✅ НОВОЕ: Автокомплит
+    const [allAudios, setAllAudios] = useState([]);
+    const [preguntaSuggestions, setPreguntaSuggestions] = useState([]);
+    const [showPreguntaSuggestions, setShowPreguntaSuggestions] = useState(false);
+
+    // ✅ НОВОЕ: Загрузка всех аудио
+    useEffect(() => {
+        loadAllAudios();
+    }, []);
 
     useEffect(() => {
         if (audio) {
@@ -47,12 +58,54 @@ function AudioForm({ audio, onClose }) {
         }
     }, [audio]);
 
-    // Проверка конфигурации
     useEffect(() => {
         if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
             console.error('Cloudinary не настроен! Проверьте .env файл');
         }
     }, []);
+
+    // Загрузка всех аудио
+    const loadAllAudios = async () => {
+        try {
+            const q = query(collection(db, 'audio'));
+            const querySnapshot = await getDocs(q);
+            const audios = [];
+            querySnapshot.forEach((doc) => {
+                audios.push(doc.data());
+            });
+            setAllAudios(audios);
+        } catch (error) {
+            console.error('Error loading audios:', error);
+        }
+    };
+
+    // Обработка изменения pregunta с автокомплитом
+    const handlePreguntaChange = (value) => {
+        setPregunta(value);
+
+        if (errors.pregunta && value.trim()) {
+            setErrors({...errors, pregunta: false});
+        }
+
+        if (value.length >= 3) {
+            const suggestions = allAudios.filter(a =>
+                a.pregunta.toLowerCase().includes(value.toLowerCase()) &&
+                a.pregunta.toLowerCase() !== value.toLowerCase()
+            ).slice(0, 5);
+
+            setPreguntaSuggestions(suggestions);
+            setShowPreguntaSuggestions(suggestions.length > 0);
+        } else {
+            setShowPreguntaSuggestions(false);
+        }
+    };
+
+    const convertToMP3Url = (cloudinaryUrl) => {
+        if (cloudinaryUrl.includes('/video/upload/')) {
+            return cloudinaryUrl.replace('/video/upload/', '/video/upload/f_mp3/');
+        }
+        return cloudinaryUrl;
+    };
 
     const uploadToCloudinary = async (file) => {
         if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
@@ -80,8 +133,11 @@ function AudioForm({ audio, onClose }) {
             }
 
             const data = await response.json();
-            console.log('✓ Upload success:', data.secure_url);
-            return data.secure_url;
+            const originalUrl = data.secure_url;
+            const mp3Url = convertToMP3Url(originalUrl);
+
+            console.log('✓ Upload success:', mp3Url);
+            return mp3Url;
         } catch (error) {
             console.error('✗ Upload error:', error);
             throw error;
@@ -226,6 +282,9 @@ function AudioForm({ audio, onClose }) {
             newOpciones.forEach((op, i) => {
                 op.correcta = i === index;
             });
+            if (errors.noCorrect) {
+                setErrors({...errors, noCorrect: false});
+            }
         } else {
             newOpciones[index][field] = value;
             if (value.trim()) {
@@ -251,7 +310,8 @@ function AudioForm({ audio, onClose }) {
         const newErrors = {
             audioUrl: !audioUrl.trim(),
             pregunta: !pregunta.trim(),
-            opciones: opciones.map(op => !op.texto.trim())
+            opciones: opciones.map(op => !op.texto.trim()),
+            noCorrect: !opciones.some(op => op.correcta)
         };
 
         setErrors(newErrors);
@@ -259,16 +319,17 @@ function AudioForm({ audio, onClose }) {
         const emptyFields = [];
         if (newErrors.audioUrl) emptyFields.push('Audio');
         if (newErrors.pregunta) emptyFields.push('Pregunta');
-        if (newErrors.opciones.some(e => e)) emptyFields.push('Opciones');
 
-        if (emptyFields.length > 0) {
-            alert(`Complete: ${emptyFields.join(', ')}`);
-            return;
+        const emptyOpciones = newErrors.opciones.filter(e => e).length;
+        if (emptyOpciones > 0) {
+            emptyFields.push(`${emptyOpciones} opción(es)`);
+        }
+        if (newErrors.noCorrect) {
+            emptyFields.push('Marcar una opción como correcta');
         }
 
-        const hasCorrectAnswer = opciones.some(op => op.correcta);
-        if (!hasCorrectAnswer) {
-            alert('Marque una opción como correcta');
+        if (emptyFields.length > 0) {
+            alert(`Por favor, complete los siguientes campos:\n${emptyFields.join('\n')}`);
             return;
         }
 
@@ -287,10 +348,10 @@ function AudioForm({ audio, onClose }) {
         try {
             if (audio) {
                 await updateDoc(doc(db, 'audio', audio.id), audioData);
-                alert('Audio actualizado');
+                alert('Audio actualizado exitosamente');
             } else {
                 await addDoc(collection(db, 'audio'), audioData);
-                alert('Audio añadido');
+                alert('Audio añadido exitosamente');
             }
             onClose();
         } catch (error) {
@@ -329,7 +390,7 @@ function AudioForm({ audio, onClose }) {
                             <h4>Opción 1: Grabar voz</h4>
                             {!isRecording && !recordedAudioUrl && (
                                 <button type="button" className="btn-record" onClick={startRecording} disabled={uploading || loading}>
-                                    Comenzar grabación
+                                    🎤 Comenzar grabación
                                 </button>
                             )}
 
@@ -371,7 +432,7 @@ function AudioForm({ audio, onClose }) {
                                 id="audio-file-input"
                             />
                             <label htmlFor="audio-file-input" className="btn-upload">
-                                Seleccionar archivo
+                                📁 Seleccionar archivo
                             </label>
                             {uploading && <div className="upload-progress">Subiendo...</div>}
                         </div>
@@ -386,22 +447,59 @@ function AudioForm({ audio, onClose }) {
                         </div>
                     )}
 
-                    <div className="form-group">
+                    {/* Добавлен autocomplete */}
+                    <div className="form-group autocomplete-group">
                         <label>Pregunta:</label>
                         <input
                             type="text"
                             value={pregunta}
-                            onChange={(e) => {
-                                setPregunta(e.target.value);
-                                if (errors.pregunta && e.target.value.trim()) {
-                                    setErrors({...errors, pregunta: false});
-                                }
-                            }}
+                            onChange={(e) => handlePreguntaChange(e.target.value)}
+                            onFocus={() => pregunta.length >= 3 && setShowPreguntaSuggestions(preguntaSuggestions.length > 0)}
+                            onBlur={() => setTimeout(() => setShowPreguntaSuggestions(false), 200)}
                             placeholder="¿Qué escuchaste?"
                             disabled={loading}
+                            autoComplete="off"
                             className={errors.pregunta ? 'input-error' : ''}
                         />
                         {errors.pregunta && <span className="error-message">Campo obligatorio</span>}
+
+                        {/* НОВОЕ: Suggestions dropdown */}
+                        {showPreguntaSuggestions && (
+                            <div className="suggestions-dropdown">
+                                <div className="suggestions-header warning-header">
+                                    ⚠️ Preguntas similares ya existen:
+                                </div>
+                                {preguntaSuggestions.map((suggestion, index) => (
+                                    <div
+                                        key={index}
+                                        className="suggestion-item pregunta-suggestion"
+                                        onClick={() => {
+                                            setPregunta(suggestion.pregunta);
+                                            setNivel(suggestion.nivel);
+                                            setOpciones(suggestion.opciones || [
+                                                { texto: '', correcta: false },
+                                                { texto: '', correcta: false },
+                                                { texto: '', correcta: false }
+                                            ]);
+                                            // НЕ заполняем audioUrl - админ должен загрузить свой
+                                            setShowPreguntaSuggestions(false);
+                                        }}
+                                    >
+                                        <div className="suggestion-pregunta-text">
+                                            {suggestion.pregunta}
+                                        </div>
+                                        <div className="suggestion-meta">
+                                            <span className={`suggestion-nivel nivel-${suggestion.nivel.toLowerCase()}`}>
+                                                {suggestion.nivel}
+                                            </span>
+                                            <span className="suggestion-opciones-count">
+                                                {suggestion.opciones?.length || 0} opciones
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div className="form-group">
@@ -432,6 +530,7 @@ function AudioForm({ audio, onClose }) {
                             ))}
                         </div>
                         {errors.opciones.some(e => e) && <span className="error-message">Complete todas las opciones</span>}
+                        {errors.noCorrect && <span className="error-message">Debe marcar una opción como correcta</span>}
                     </div>
 
                     <div className="form-actions">

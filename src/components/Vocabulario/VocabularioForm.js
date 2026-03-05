@@ -4,7 +4,7 @@ import { collection, addDoc, updateDoc, doc, getDocs, query } from 'firebase/fir
 import { db } from '../../firebase/config';
 import './Vocabulario.css';
 
-const NIVELES = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+const NIVELES = ['A1', 'A2', 'B1', 'B2'];
 
 function VocabularioForm({ word, onClose }) {
     const [nivel, setNivel] = useState('A1');

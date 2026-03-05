@@ -1,0 +1,158 @@
+/* src/components/Gramatica/Gramatica.css */
+@import url('../Audio/Audio.css');
+
+.tipo-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    background: #EAE2D6;
+    color: #867666;
+}
+
+.preview-text {
+    margin-top: 4px;
+    font-size: 13px;
+    color: #867666;
+    font-style: italic;
+}
+
+.palabra-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.palabra-item span {
+    min-width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #867666;
+    color: white;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.palabra-item input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 2px solid #D5C3AA;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.palabra-item button {
+    background: #d32f2f;
+    color: white;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.palabra-item button:hover {
+    background: #b71c1c;
+}
+
+.gramatica-form .form-group {
+    margin-bottom: 20px;
+}
+
+.gramatica-form label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #333;
+    font-size: 14px;
+}
+
+.gramatica-form input[type="text"],
+.gramatica-form select {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #D5C3AA;
+    border-radius: 8px;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+
+.gramatica-form input:focus,
+.gramatica-form select:focus {
+    outline: none;
+    border-color: #867666;
+}
+
+/* ✅ НОВОЕ: Автокомплит стили */
+.autocomplete-group {
+    position: relative;
+}
+
+.suggestions-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 2px solid #D5C3AA;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(134, 118, 102, 0.2);
+}
+
+.suggestions-header {
+    padding: 12px;
+    background: #EAE2D6;
+    font-weight: 600;
+    font-size: 13px;
+    color: #867666;
+    border-bottom: 1px solid #D5C3AA;
+}
+
+.warning-header {
+    background: #fff3e0;
+    color: #e65100;
+}
+
+.suggestion-item {
+    padding: 12px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border-bottom: 1px solid #EAE2D6;
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.suggestion-item:hover {
+    background: #EAE2D6;
+}
+
+.suggestion-pregunta-text {
+    font-size: 14px;
+    color: #333;
+    margin-bottom: 6px;
+    font-weight: 500;
+}
+
+.suggestion-meta {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.suggestion-nivel {
+    padding: 2px 8px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+}
