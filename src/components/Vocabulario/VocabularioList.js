@@ -1,8 +1,9 @@
 // src/components/Vocabulario/VocabularioList.js
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import VocabularioForm from './VocabularioForm';
+import VocabularioBulkImport from './VocabularioBulkImport'; // ← НОВОЕ
 import './Vocabulario.css';
 
 const NIVELES = ['A1', 'A2', 'B1', 'B2'];
@@ -14,6 +15,7 @@ function VocabularioList() {
     const [selectedNivel, setSelectedNivel] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [showForm, setShowForm] = useState(false);
+    const [showBulkImport, setShowBulkImport] = useState(false); // ← НОВОЕ
     const [editingWord, setEditingWord] = useState(null);
 
     useEffect(() => {
@@ -23,16 +25,14 @@ function VocabularioList() {
     const loadWords = async () => {
         setLoading(true);
         try {
-            // ВСЕГДА загружаем ВСЕ слова
             const allQuery = query(collection(db, 'vocabulario'));
             const allSnapshot = await getDocs(allQuery);
             const allData = [];
             allSnapshot.forEach((doc) => {
                 allData.push({ id: doc.id, ...doc.data() });
             });
-            setAllWords(allData); // ← Сохраняем все
+            setAllWords(allData);
 
-            // Фильтруем для отображения
             let displayData;
             if (selectedNivel) {
                 displayData = allData.filter(w => w.nivel === selectedNivel);
@@ -76,12 +76,17 @@ function VocabularioList() {
         loadWords();
     };
 
+    // ← НОВОЕ: Close bulk import
+    const handleBulkImportClose = () => {
+        setShowBulkImport(false);
+        loadWords();
+    };
+
     const filteredWords = words.filter(word =>
         word.es.toLowerCase().includes(searchTerm.toLowerCase()) ||
         word.ru.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // ← ИСПРАВЛЕНО: считаем от allWords
     const getCountByNivel = (nivel) => {
         return allWords.filter(w => w.nivel === nivel).length;
     };
@@ -123,9 +128,15 @@ function VocabularioList() {
                 <div className="panel-header">
                     <div className="header-top">
                         <h1>Vocabulario</h1>
-                        <button className="btn-add" onClick={() => setShowForm(true)}>
-                            + Añadir palabra
-                        </button>
+                        {/* Две кнопки */}
+                        <div className="button-group">
+                            <button className="btn-add" onClick={() => setShowForm(true)}>
+                                + Añadir palabra
+                            </button>
+                            <button className="btn-add-bulk" onClick={() => setShowBulkImport(true)}>
+                                📝 Añadir varias
+                            </button>
+                        </div>
                     </div>
 
                     <div className="search-bar">
@@ -195,10 +206,18 @@ function VocabularioList() {
                 )}
             </div>
 
+            {/* Single Word Form */}
             {showForm && (
                 <VocabularioForm
                     word={editingWord}
                     onClose={handleFormClose}
+                />
+            )}
+
+            {/* Import Modal */}
+            {showBulkImport && (
+                <VocabularioBulkImport
+                    onClose={handleBulkImportClose}
                 />
             )}
         </div>
