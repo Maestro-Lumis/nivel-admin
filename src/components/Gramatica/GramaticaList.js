@@ -1,12 +1,14 @@
-// src/components/Gramatica/GramaticaList.js
 import React, { useState, useEffect } from 'react';
 import { collection, query, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import GramaticaBulkImport from './GramaticaBulkImport';
-import './Gramatica.css';
 import GramaticaForm from "./GramaticaForm";
+import Pagination from '../common/Pagination';
+import { useToast } from '../common/Toast';
+import './Gramatica.css';
 
 const NIVELES = ['A1', 'A2', 'B1', 'B2'];
+const ITEMS_PER_PAGE = 100;
 
 function GramaticaList() {
     const [questions, setQuestions] = useState([]);
@@ -17,10 +19,17 @@ function GramaticaList() {
     const [showForm, setShowForm] = useState(false);
     const [showBulkImport, setShowBulkImport] = useState(false);
     const [editingQuestion, setEditingQuestion] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+
+    const toast = useToast();
 
     useEffect(() => {
         loadQuestions();
     }, [selectedNivel]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [selectedNivel, searchTerm]);
 
     const loadQuestions = async () => {
         setLoading(true);
@@ -46,7 +55,7 @@ function GramaticaList() {
             console.log(`Cargadas ${displayData.length} preguntas`);
         } catch (error) {
             console.error('Error:', error);
-            alert('Error al cargar: ' + error.message);
+            toast.error('Error al cargar preguntas');
         } finally {
             setLoading(false);
         }
@@ -57,9 +66,11 @@ function GramaticaList() {
 
         try {
             await deleteDoc(doc(db, 'grammar_questions', questionId));
+            toast.success('Pregunta eliminada');
             loadQuestions();
         } catch (error) {
-            alert('Error: ' + error.message);
+            console.error('Error:', error);
+            toast.error('Error al eliminar');
         }
     };
 
@@ -82,6 +93,11 @@ function GramaticaList() {
     const filteredQuestions = questions.filter(q =>
         q.pregunta.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    const totalPages = Math.ceil(filteredQuestions.length / ITEMS_PER_PAGE);
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const paginatedQuestions = filteredQuestions.slice(startIndex, endIndex);
 
     const getCountByNivel = (nivel) => {
         return allQuestions.filter(q => q.nivel === nivel).length;
@@ -136,7 +152,7 @@ function GramaticaList() {
                                 + Añadir pregunta
                             </button>
                             <button className="btn-add-bulk" onClick={() => setShowBulkImport(true)}>
-                                📝 Añadir varias
+                                Añadir varias
                             </button>
                         </div>
                     </div>
@@ -170,7 +186,7 @@ function GramaticaList() {
                             </tr>
                             </thead>
                             <tbody>
-                            {filteredQuestions.map(q => (
+                            {paginatedQuestions.map(q => (
                                 <tr key={q.id}>
                                     <td>
                                         <span className={`badge nivel-${q.nivel.toLowerCase()}`}>
@@ -213,6 +229,14 @@ function GramaticaList() {
                         )}
                     </div>
                 )}
+
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalItems={filteredQuestions.length}
+                    itemsPerPage={ITEMS_PER_PAGE}
+                    onPageChange={setCurrentPage}
+                />
             </div>
 
             {showForm && (

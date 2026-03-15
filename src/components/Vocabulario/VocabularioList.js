@@ -1,12 +1,14 @@
-// src/components/Vocabulario/VocabularioList.js
 import React, { useState, useEffect } from 'react';
 import { collection, query, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import VocabularioForm from './VocabularioForm';
-import VocabularioBulkImport from './VocabularioBulkImport'; // ← НОВОЕ
+import VocabularioBulkImport from './VocabularioBulkImport';
+import Pagination from '../common/Pagination';
+import { useToast } from '../common/Toast';
 import './Vocabulario.css';
 
 const NIVELES = ['A1', 'A2', 'B1', 'B2'];
+const ITEMS_PER_PAGE = 100;
 
 function VocabularioList() {
     const [words, setWords] = useState([]);
@@ -15,12 +17,19 @@ function VocabularioList() {
     const [selectedNivel, setSelectedNivel] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [showForm, setShowForm] = useState(false);
-    const [showBulkImport, setShowBulkImport] = useState(false); // ← НОВОЕ
+    const [showBulkImport, setShowBulkImport] = useState(false);
     const [editingWord, setEditingWord] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+
+    const toast = useToast();
 
     useEffect(() => {
         loadWords();
     }, [selectedNivel]);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [selectedNivel, searchTerm]);
 
     const loadWords = async () => {
         setLoading(true);
@@ -46,7 +55,7 @@ function VocabularioList() {
             console.log(`Cargadas ${displayData.length} palabras (total: ${allData.length})`);
         } catch (error) {
             console.error('Error al cargar palabras:', error);
-            alert('Error al cargar palabras: ' + error.message);
+            toast.error('Error al cargar palabras');
         } finally {
             setLoading(false);
         }
@@ -58,10 +67,11 @@ function VocabularioList() {
         try {
             await deleteDoc(doc(db, 'vocabulario', wordId));
             console.log('Palabra eliminada:', wordId);
+            toast.success('Palabra eliminada');
             loadWords();
         } catch (error) {
             console.error('Error al eliminar:', error);
-            alert('Error al eliminar: ' + error.message);
+            toast.error('Error al eliminar');
         }
     };
 
@@ -76,7 +86,6 @@ function VocabularioList() {
         loadWords();
     };
 
-    // ← НОВОЕ: Close bulk import
     const handleBulkImportClose = () => {
         setShowBulkImport(false);
         loadWords();
@@ -87,13 +96,17 @@ function VocabularioList() {
         word.ru.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const totalPages = Math.ceil(filteredWords.length / ITEMS_PER_PAGE);
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const paginatedWords = filteredWords.slice(startIndex, endIndex);
+
     const getCountByNivel = (nivel) => {
         return allWords.filter(w => w.nivel === nivel).length;
     };
 
     return (
         <div className="split-container">
-            {/* Sidebar */}
             <div className="sidebar">
                 <div className="sidebar-header">
                     <h2>Niveles</h2>
@@ -123,18 +136,16 @@ function VocabularioList() {
                 </div>
             </div>
 
-            {/* Main Content */}
             <div className="main-panel">
                 <div className="panel-header">
                     <div className="header-top">
                         <h1>Vocabulario</h1>
-                        {/* Две кнопки */}
                         <div className="button-group">
                             <button className="btn-add" onClick={() => setShowForm(true)}>
                                 + Añadir palabra
                             </button>
                             <button className="btn-add-bulk" onClick={() => setShowBulkImport(true)}>
-                                📝 Añadir varias
+                                Añadir varias
                             </button>
                         </div>
                     </div>
@@ -167,7 +178,7 @@ function VocabularioList() {
                             </tr>
                             </thead>
                             <tbody>
-                            {filteredWords.map(word => (
+                            {paginatedWords.map(word => (
                                 <tr key={word.id}>
                                     <td>
                                         <span className={`badge nivel-${word.nivel.toLowerCase()}`}>
@@ -204,9 +215,16 @@ function VocabularioList() {
                         )}
                     </div>
                 )}
+
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalItems={filteredWords.length}
+                    itemsPerPage={ITEMS_PER_PAGE}
+                    onPageChange={setCurrentPage}
+                />
             </div>
 
-            {/* Single Word Form */}
             {showForm && (
                 <VocabularioForm
                     word={editingWord}
@@ -214,7 +232,6 @@ function VocabularioList() {
                 />
             )}
 
-            {/* Import Modal */}
             {showBulkImport && (
                 <VocabularioBulkImport
                     onClose={handleBulkImportClose}

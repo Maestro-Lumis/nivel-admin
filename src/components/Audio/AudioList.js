@@ -1,29 +1,37 @@
-// src/components/Audio/AudioList.js
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import AudioForm from './AudioForm';
-import './Audio.css'
+import Pagination from '../common/Pagination';
+import { useToast } from '../common/Toast';
+import './Audio.css';
 
 const NIVELES = ['A1', 'A2', 'B1', 'B2'];
+const ITEMS_PER_PAGE = 100;
 
 function AudioList() {
     const [audios, setAudios] = useState([]);
-    const [allAudios, setAllAudios] = useState([]); // ← НОВОЕ: храним ВСЕ аудио
+    const [allAudios, setAllAudios] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedNivel, setSelectedNivel] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [showForm, setShowForm] = useState(false);
     const [editingAudio, setEditingAudio] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+
+    const toast = useToast();
 
     useEffect(() => {
         loadAudios();
     }, [selectedNivel]);
 
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [selectedNivel, searchTerm]);
+
     const loadAudios = async () => {
         setLoading(true);
         try {
-            // ВСЕГДА загружаем ВСЕ аудио для счетчиков
             const allQuery = query(collection(db, 'audio'));
             const allSnapshot = await getDocs(allQuery);
             const allData = [];
@@ -32,7 +40,6 @@ function AudioList() {
             });
             setAllAudios(allData);
 
-            // Фильтруем для отображения
             let displayData;
             if (selectedNivel) {
                 displayData = allData.filter(a => a.nivel === selectedNivel);
@@ -40,14 +47,13 @@ function AudioList() {
                 displayData = allData;
             }
 
-            // Сортируем
             displayData.sort((a, b) => a.pregunta.localeCompare(b.pregunta));
             setAudios(displayData);
 
-            console.log(`Cargados ${displayData.length} audios (total: ${allData.length})`);
+            console.log(`Cargados ${displayData.length} audios`);
         } catch (error) {
             console.error('Error al cargar audios:', error);
-            alert('Error al cargar audios: ' + error.message);
+            toast.error('Error al cargar audios');
         } finally {
             setLoading(false);
         }
@@ -58,11 +64,11 @@ function AudioList() {
 
         try {
             await deleteDoc(doc(db, 'audio', audioId));
-            console.log('Audio eliminado:', audioId);
+            toast.success('Audio eliminado');
             loadAudios();
         } catch (error) {
             console.error('Error al eliminar:', error);
-            alert('Error al eliminar: ' + error.message);
+            toast.error('Error al eliminar');
         }
     };
 
@@ -82,13 +88,17 @@ function AudioList() {
         (audio.audioUrl && audio.audioUrl.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
+    const totalPages = Math.ceil(filteredAudios.length / ITEMS_PER_PAGE);
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const paginatedAudios = filteredAudios.slice(startIndex, endIndex);
+
     const getCountByNivel = (nivel) => {
         return allAudios.filter(a => a.nivel === nivel).length;
     };
 
     return (
         <div className="split-container">
-            {/* Sidebar */}
             <div className="sidebar">
                 <div className="sidebar-header">
                     <h2>Niveles</h2>
@@ -118,7 +128,6 @@ function AudioList() {
                 </div>
             </div>
 
-            {/* Main Panel */}
             <div className="main-panel">
                 <div className="panel-header">
                     <div className="header-top">
@@ -157,7 +166,7 @@ function AudioList() {
                             </tr>
                             </thead>
                             <tbody>
-                            {filteredAudios.map(audio => (
+                            {paginatedAudios.map(audio => (
                                 <tr key={audio.id}>
                                     <td>
                                         <span className={`badge nivel-${audio.nivel.toLowerCase()}`}>
@@ -205,6 +214,14 @@ function AudioList() {
                         )}
                     </div>
                 )}
+
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalItems={filteredAudios.length}
+                    itemsPerPage={ITEMS_PER_PAGE}
+                    onPageChange={setCurrentPage}
+                />
             </div>
 
             {showForm && (

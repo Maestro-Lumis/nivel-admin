@@ -1,38 +1,45 @@
-// src/components/Lectura/LecturaList.js
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import LecturaForm from './LecturaForm';
+import Pagination from '../common/Pagination';
+import { useToast } from '../common/Toast';
 import './Lectura.css';
 
 const NIVELES = ['A1', 'A2', 'B1', 'B2'];
+const ITEMS_PER_PAGE = 100;
 
 function LecturaList() {
     const [lecturas, setLecturas] = useState([]);
-    const [allLecturas, setAllLecturas] = useState([]); // ← НОВОЕ: все лектуры
+    const [allLecturas, setAllLecturas] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedNivel, setSelectedNivel] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [showForm, setShowForm] = useState(false);
     const [editingLectura, setEditingLectura] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+
+    const toast = useToast();
 
     useEffect(() => {
         loadLecturas();
     }, [selectedNivel]);
 
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [selectedNivel, searchTerm]);
+
     const loadLecturas = async () => {
         setLoading(true);
         try {
-            // ВСЕГДА загружаем ВСЕ лектуры
             const allQuery = query(collection(db, 'lectura'));
             const allSnapshot = await getDocs(allQuery);
             const allData = [];
             allSnapshot.forEach((doc) => {
                 allData.push({ id: doc.id, ...doc.data() });
             });
-            setAllLecturas(allData); // ← Сохраняем все
+            setAllLecturas(allData);
 
-            // Фильтруем для отображения
             let displayData;
             if (selectedNivel) {
                 displayData = allData.filter(l => l.nivel === selectedNivel);
@@ -43,10 +50,10 @@ function LecturaList() {
             displayData.sort((a, b) => a.pregunta.localeCompare(b.pregunta));
             setLecturas(displayData);
 
-            console.log(`Cargadas ${displayData.length} lecturas (total: ${allData.length})`);
+            console.log(`Cargadas ${displayData.length} lecturas`);
         } catch (error) {
             console.error('Error al cargar lecturas:', error);
-            alert('Error al cargar lecturas: ' + error.message);
+            toast.error('Error al cargar lecturas');
         } finally {
             setLoading(false);
         }
@@ -57,11 +64,11 @@ function LecturaList() {
 
         try {
             await deleteDoc(doc(db, 'lectura', lecturaId));
-            console.log('Lectura eliminada:', lecturaId);
+            toast.success('Lectura eliminada');
             loadLecturas();
         } catch (error) {
             console.error('Error al eliminar:', error);
-            alert('Error al eliminar: ' + error.message);
+            toast.error('Error al eliminar');
         }
     };
 
@@ -81,14 +88,17 @@ function LecturaList() {
         lectura.texto.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // ← ИСПРАВЛЕНО: считаем от allLecturas
+    const totalPages = Math.ceil(filteredLecturas.length / ITEMS_PER_PAGE);
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const paginatedLecturas = filteredLecturas.slice(startIndex, endIndex);
+
     const getCountByNivel = (nivel) => {
         return allLecturas.filter(l => l.nivel === nivel).length;
     };
 
     return (
         <div className="split-container">
-            {/* Sidebar */}
             <div className="sidebar">
                 <div className="sidebar-header">
                     <h2>Niveles</h2>
@@ -118,7 +128,6 @@ function LecturaList() {
                 </div>
             </div>
 
-            {/* Main Panel */}
             <div className="main-panel">
                 <div className="panel-header">
                     <div className="header-top">
@@ -157,7 +166,7 @@ function LecturaList() {
                             </tr>
                             </thead>
                             <tbody>
-                            {filteredLecturas.map(lectura => (
+                            {paginatedLecturas.map(lectura => (
                                 <tr key={lectura.id}>
                                     <td>
                                         <span className={`badge nivel-${lectura.nivel.toLowerCase()}`}>
@@ -199,6 +208,14 @@ function LecturaList() {
                         )}
                     </div>
                 )}
+
+                <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalItems={filteredLecturas.length}
+                    itemsPerPage={ITEMS_PER_PAGE}
+                    onPageChange={setCurrentPage}
+                />
             </div>
 
             {showForm && (
