@@ -30,11 +30,11 @@ function GramaticaForm({ question, onClose }) {
 
     const [loading, setLoading] = useState(false);
 
-    // ✅ НОВОЕ: Автокомплит
+    // Автокомплит
     const [allQuestions, setAllQuestions] = useState([]);
     const [preguntaSuggestions, setPreguntaSuggestions] = useState([]);
     const [showPreguntaSuggestions, setShowPreguntaSuggestions] = useState(false);
-
+    const [quickAdd, setQuickAdd] = useState(false);
     const [errors, setErrors] = useState({
         pregunta: false,
         opciones: [],
@@ -45,7 +45,7 @@ function GramaticaForm({ question, onClose }) {
         noCorrect: false
     });
 
-    // ✅ НОВОЕ: Загружаем все вопросы
+    // Загружаем все вопросы
     useEffect(() => {
         loadAllQuestions();
     }, []);
@@ -75,7 +75,26 @@ function GramaticaForm({ question, onClose }) {
         }
     }, [question]);
 
-    // ✅ НОВОЕ: Загрузка всех вопросов
+    const clearForm = () => {
+        setPregunta('');
+        setOpciones([
+            { texto: '', correcta: false },
+            { texto: '', correcta: false },
+            { texto: '', correcta: false },
+            { texto: '', correcta: false }
+        ]);
+        setErrors({
+            pregunta: false,
+            opciones: [],
+            fraseIncorrecta: false,
+            errorPalabra: false,
+            palabras: [],
+            respuestaCorrecta: false,
+            noCorrect: false
+        });
+    };
+
+    // Загрузка всех вопросов
     const loadAllQuestions = async () => {
         try {
             const q = query(collection(db, 'grammar_questions'));
@@ -90,7 +109,7 @@ function GramaticaForm({ question, onClose }) {
         }
     };
 
-    // бработка изменения pregunta с автокомплитом
+    // Обработка изменения pregunta с автокомплитом
     const handlePreguntaChange = (value) => {
         setPregunta(value);
 
@@ -289,9 +308,18 @@ function GramaticaForm({ question, onClose }) {
                 alert('Pregunta actualizada exitosamente');
             } else {
                 await addDoc(collection(db, 'grammar_questions'), questionData);
-                alert('Pregunta añadida exitosamente');
+
+                if (quickAdd) {
+                    clearForm();
+                    await loadAllQuestions();
+                } else {
+                    alert('Pregunta añadida exitosamente');
+                    onClose();
+                }
             }
-            onClose();
+            if (question) {
+                onClose();
+            }
         } catch (error) {
             console.error('Error:', error);
             alert('Error: ' + (error?.message || 'Unknown error'));
@@ -325,7 +353,7 @@ function GramaticaForm({ question, onClose }) {
                         </select>
                     </div>
 
-                    {/* НОВОЕ: Добавлен autocomplete */}
+                    {/* Добавлен autocomplete */}
                     <div className="form-group autocomplete-group">
                         <label>Pregunta:</label>
                         <input
@@ -342,7 +370,7 @@ function GramaticaForm({ question, onClose }) {
                         {errors.pregunta && (
                             <span className="error-message">Este campo es obligatorio</span>
                         )}
-                        {/* НОВОЕ: Suggestions dropdown */}
+                        {/* Suggestions dropdown */}
                         {showPreguntaSuggestions && (
                             <div className="suggestions-dropdown">
                                 <div className="suggestions-header warning-header">
@@ -580,7 +608,18 @@ function GramaticaForm({ question, onClose }) {
                             </div>
                         </>
                     )}
-
+                    {!question && (
+                        <div className="quick-add-checkbox">
+                            <input
+                                type="checkbox"
+                                id="quickAdd"
+                                checked={quickAdd}
+                                onChange={(e) => setQuickAdd(e.target.checked)}
+                                disabled={loading}
+                            />
+                            <label htmlFor="quickAdd">⚡ Guardar y añadir otra pregunta</label>
+                        </div>
+                    )}
                     <div className="form-actions">
                         <button type="button" className="btn-cancel" onClick={onClose} disabled={loading}>
                             Cancelar

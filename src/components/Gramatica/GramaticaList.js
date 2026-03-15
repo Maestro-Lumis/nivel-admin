@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import GramaticaForm from './GramaticaForm';
+import GramaticaBulkImport from './GramaticaBulkImport';
 import './Gramatica.css';
+import GramaticaForm from "./GramaticaForm";
 
 const NIVELES = ['A1', 'A2', 'B1', 'B2'];
 
@@ -14,6 +15,7 @@ function GramaticaList() {
     const [selectedNivel, setSelectedNivel] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
     const [showForm, setShowForm] = useState(false);
+    const [showBulkImport, setShowBulkImport] = useState(false);
     const [editingQuestion, setEditingQuestion] = useState(null);
 
     useEffect(() => {
@@ -72,6 +74,11 @@ function GramaticaList() {
         loadQuestions();
     };
 
+    const handleBulkImportClose = () => {
+        setShowBulkImport(false);
+        loadQuestions();
+    };
+
     const filteredQuestions = questions.filter(q =>
         q.pregunta.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -124,9 +131,14 @@ function GramaticaList() {
                 <div className="panel-header">
                     <div className="header-top">
                         <h1>Gramática</h1>
-                        <button className="btn-add" onClick={() => setShowForm(true)}>
-                            + Añadir pregunta
-                        </button>
+                        <div className="button-group">
+                            <button className="btn-add" onClick={() => setShowForm(true)}>
+                                + Añadir pregunta
+                            </button>
+                            <button className="btn-add-bulk" onClick={() => setShowBulkImport(true)}>
+                                📝 Añadir varias
+                            </button>
+                        </div>
                     </div>
 
                     <div className="search-bar">
@@ -207,6 +219,11 @@ function GramaticaList() {
                 <GramaticaForm
                     question={editingQuestion}
                     onClose={handleFormClose}
+                />
+            )}
+            {showBulkImport && (
+                <GramaticaBulkImport
+                    onClose={handleBulkImportClose}
                 />
             )}
         </div>
