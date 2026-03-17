@@ -64,7 +64,7 @@ function AudioForm({ audio, onClose }) {
         }
     }, []);
 
-    // Загрузка всех аудио
+    // ✅ НОВОЕ: Загрузка всех аудио
     const loadAllAudios = async () => {
         try {
             const q = query(collection(db, 'audio'));
@@ -79,7 +79,7 @@ function AudioForm({ audio, onClose }) {
         }
     };
 
-    // Обработка изменения pregunta с автокомплитом
+    // ✅ НОВОЕ: Обработка изменения pregunta с автокомплитом
     const handlePreguntaChange = (value) => {
         setPregunta(value);
 
@@ -447,7 +447,7 @@ function AudioForm({ audio, onClose }) {
                         </div>
                     )}
 
-                    {/* Добавлен autocomplete */}
+                    {/* ✅ НОВОЕ: Добавлен autocomplete */}
                     <div className="form-group autocomplete-group">
                         <label>Pregunta:</label>
                         <input
@@ -463,7 +463,7 @@ function AudioForm({ audio, onClose }) {
                         />
                         {errors.pregunta && <span className="error-message">Campo obligatorio</span>}
 
-                        {/* НОВОЕ: Suggestions dropdown */}
+                        {/* ✅ НОВОЕ: Suggestions dropdown */}
                         {showPreguntaSuggestions && (
                             <div className="suggestions-dropdown">
                                 <div className="suggestions-header warning-header">

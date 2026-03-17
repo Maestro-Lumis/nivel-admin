@@ -341,6 +341,23 @@
     color: #333;
 }
 
+.data-table.sticky-header thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.data-table.sticky-header thead th {
+    background: white;
+}
+
+.content-area {
+    overflow-y: auto;
+    max-height: calc(100vh - 250px);
+}
+
 @media (max-width: 768px) {
     .button-group {
         width: 100%;

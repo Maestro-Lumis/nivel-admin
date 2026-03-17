@@ -4,6 +4,8 @@ import { db } from '../../firebase/config';
 import GramaticaBulkImport from './GramaticaBulkImport';
 import GramaticaForm from "./GramaticaForm";
 import Pagination from '../common/Pagination';
+import EmptyState from '../common/EmptyState';
+import LoadingSkeleton from '../common/LoadingSkeleton';
 import { useToast } from '../common/Toast';
 import './Gramatica.css';
 
@@ -172,10 +174,26 @@ function GramaticaList() {
                 </div>
 
                 {loading ? (
-                    <div className="loading">Cargando...</div>
+                    <LoadingSkeleton rows={8} />
+                ) : filteredQuestions.length === 0 ? (
+                    searchTerm ? (
+                        <EmptyState
+                            icon="🔍"
+                            title="No se encontraron preguntas"
+                            description={`No hay resultados para "${searchTerm}"`}
+                        />
+                    ) : (
+                        <EmptyState
+                            icon="✏️"
+                            title={selectedNivel ? `No hay preguntas en ${selectedNivel}` : "No hay preguntas todavía"}
+                            description={selectedNivel ? `Comienza añadiendo preguntas de nivel ${selectedNivel}` : "Comienza añadiendo tu primera pregunta"}
+                            actionText="+ Añadir primera pregunta"
+                            onAction={() => setShowForm(true)}
+                        />
+                    )
                 ) : (
                     <div className="content-area">
-                        <table className="data-table">
+                        <table className="data-table sticky-header">
                             <thead>
                             <tr>
                                 <th>Nivel</th>
@@ -221,12 +239,6 @@ function GramaticaList() {
                             ))}
                             </tbody>
                         </table>
-
-                        {filteredQuestions.length === 0 && (
-                            <div className="no-results">
-                                {searchTerm ? 'No encontrado' : 'Sin preguntas'}
-                            </div>
-                        )}
                     </div>
                 )}
 

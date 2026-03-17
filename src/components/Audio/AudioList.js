@@ -3,6 +3,8 @@ import { collection, query, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import AudioForm from './AudioForm';
 import Pagination from '../common/Pagination';
+import EmptyState from '../common/EmptyState';
+import LoadingSkeleton from '../common/LoadingSkeleton';
 import { useToast } from '../common/Toast';
 import './Audio.css';
 
@@ -152,10 +154,26 @@ function AudioList() {
                 </div>
 
                 {loading ? (
-                    <div className="loading">Cargando audios...</div>
+                    <LoadingSkeleton rows={8} />
+                ) : filteredAudios.length === 0 ? (
+                    searchTerm ? (
+                        <EmptyState
+                            icon="🔍"
+                            title="No se encontraron audios"
+                            description={`No hay resultados para "${searchTerm}"`}
+                        />
+                    ) : (
+                        <EmptyState
+                            icon="🎧"
+                            title={selectedNivel ? `No hay audios en ${selectedNivel}` : "No hay audios todavía"}
+                            description={selectedNivel ? `Comienza añadiendo audios de nivel ${selectedNivel}` : "Comienza añadiendo tu primer audio"}
+                            actionText="+ Añadir primer audio"
+                            onAction={() => setShowForm(true)}
+                        />
+                    )
                 ) : (
                     <div className="content-area">
-                        <table className="data-table">
+                        <table className="data-table sticky-header">
                             <thead>
                             <tr>
                                 <th>Nivel</th>
@@ -204,14 +222,6 @@ function AudioList() {
                             ))}
                             </tbody>
                         </table>
-
-                        {filteredAudios.length === 0 && (
-                            <div className="no-results">
-                                {searchTerm
-                                    ? 'No se encontraron audios'
-                                    : 'No hay audios todavía'}
-                            </div>
-                        )}
                     </div>
                 )}
 

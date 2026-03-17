@@ -4,6 +4,8 @@ import { db } from '../../firebase/config';
 import VocabularioForm from './VocabularioForm';
 import VocabularioBulkImport from './VocabularioBulkImport';
 import Pagination from '../common/Pagination';
+import EmptyState from '../common/EmptyState';
+import LoadingSkeleton from '../common/LoadingSkeleton';
 import { useToast } from '../common/Toast';
 import './Vocabulario.css';
 
@@ -165,10 +167,26 @@ function VocabularioList() {
                 </div>
 
                 {loading ? (
-                    <div className="loading">Cargando palabras...</div>
+                    <LoadingSkeleton rows={10} />
+                ) : filteredWords.length === 0 ? (
+                    searchTerm ? (
+                        <EmptyState
+                            icon="🔍"
+                            title="No se encontraron palabras"
+                            description={`No hay resultados para "${searchTerm}"`}
+                        />
+                    ) : (
+                        <EmptyState
+                            icon="📚"
+                            title={selectedNivel ? `No hay palabras en ${selectedNivel}` : "No hay palabras todavía"}
+                            description={selectedNivel ? `Comienza añadiendo palabras de nivel ${selectedNivel}` : "Comienza añadiendo tu primera palabra"}
+                            actionText="+ Añadir primera palabra"
+                            onAction={() => setShowForm(true)}
+                        />
+                    )
                 ) : (
                     <div className="content-area">
-                        <table className="data-table">
+                        <table className="data-table sticky-header">
                             <thead>
                             <tr>
                                 <th>Nivel</th>
@@ -205,14 +223,6 @@ function VocabularioList() {
                             ))}
                             </tbody>
                         </table>
-
-                        {filteredWords.length === 0 && (
-                            <div className="no-results">
-                                {searchTerm
-                                    ? 'No se encontraron palabras'
-                                    : 'No hay palabras todavía'}
-                            </div>
-                        )}
                     </div>
                 )}
 

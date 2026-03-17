@@ -1,0 +1,41 @@
+.skeleton-table {
+    padding: 20px 30px;
+}
+
+.skeleton-header,
+.skeleton-row {
+    display: flex;
+    gap: 16px;
+    padding: 16px 0;
+    border-bottom: 1px solid #EAE2D6;
+}
+
+.skeleton-cell {
+    height: 20px;
+    border-radius: 4px;
+    background: #EAE2D6;
+}
+
+.skeleton-shimmer {
+    background: linear-gradient(
+            90deg,
+            #EAE2D6 0%,
+            #D5C3AA 50%,
+            #EAE2D6 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+.skeleton-row:nth-child(even) .skeleton-cell {
+    opacity: 0.8;
+}

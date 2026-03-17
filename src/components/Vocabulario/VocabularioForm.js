@@ -1,7 +1,7 @@
-// src/components/Vocabulario/VocabularioForm.js
 import React, { useState, useEffect } from 'react';
 import { collection, addDoc, updateDoc, doc, getDocs, query } from 'firebase/firestore';
 import { db } from '../../firebase/config';
+import { useToast } from '../common/Toast';
 import './Vocabulario.css';
 
 const NIVELES = ['A1', 'A2', 'B1', 'B2'];
@@ -16,11 +16,17 @@ function VocabularioForm({ word, onClose }) {
     const [ruSuggestions, setRuSuggestions] = useState([]);
     const [showEsSuggestions, setShowEsSuggestions] = useState(false);
     const [showRuSuggestions, setShowRuSuggestions] = useState(false);
-    const [quickAdd, setQuickAdd] = useState(false); // ← НОВОЕ
+    const [quickAdd, setQuickAdd] = useState(false);
     const [errors, setErrors] = useState({
+        es: '',
+        ru: ''
+    });
+    const [touched, setTouched] = useState({
         es: false,
         ru: false
     });
+
+    const toast = useToast();
 
     useEffect(() => {
         loadAllWords();
@@ -34,13 +40,27 @@ function VocabularioForm({ word, onClose }) {
         }
     }, [word]);
 
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                onClose();
+            }
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                handleSubmit(e);
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [es, ru, nivel, quickAdd]);
+
     const loadAllWords = async () => {
         try {
             const q = query(collection(db, 'vocabulario'));
             const querySnapshot = await getDocs(q);
             const words = [];
-            querySnapshot.forEach((doc) => {
-                words.push(doc.data());
+            querySnapshot.forEach((docSnap) => {
+                words.push({ id: docSnap.id, ...docSnap.data() });
             });
             setAllWords(words);
         } catch (error) {
@@ -48,10 +68,30 @@ function VocabularioForm({ word, onClose }) {
         }
     };
 
+    const validateEs = (value) => {
+        if (!value.trim()) {
+            return 'Este campo es obligatorio';
+        }
+        if (value.trim().length < 2) {
+            return 'Mínimo 2 caracteres';
+        }
+        return '';
+    };
+
+    const validateRu = (value) => {
+        if (!value.trim()) {
+            return 'Это поле обязательно';
+        }
+        if (value.trim().length < 2) {
+            return 'Минимум 2 символа';
+        }
+        return '';
+    };
+
     const handleEsChange = (value) => {
         setEs(value);
-        if (errors.es && value.trim()) {
-            setErrors({...errors, es: false});
+        if (touched.es) {
+            setErrors(prev => ({ ...prev, es: validateEs(value) }));
         }
 
         if (value.length >= 3) {
@@ -69,8 +109,8 @@ function VocabularioForm({ word, onClose }) {
 
     const handleRuChange = (value) => {
         setRu(value);
-        if (errors.ru && value.trim()) {
-            setErrors({...errors, ru: false});
+        if (touched.ru) {
+            setErrors(prev => ({ ...prev, ru: validateRu(value) }));
         }
 
         if (value.length >= 3) {
@@ -86,29 +126,34 @@ function VocabularioForm({ word, onClose }) {
         }
     };
 
-    // Очистить поля для быстрого добавления
+    const handleEsBlur = () => {
+        setTouched(prev => ({ ...prev, es: true }));
+        setErrors(prev => ({ ...prev, es: validateEs(es) }));
+    };
+
+    const handleRuBlur = () => {
+        setTouched(prev => ({ ...prev, ru: true }));
+        setErrors(prev => ({ ...prev, ru: validateRu(ru) }));
+    };
+
     const clearForm = () => {
         setEs('');
         setRu('');
-        setErrors({ es: false, ru: false });
+        setErrors({ es: '', ru: '' });
+        setTouched({ es: false, ru: false });
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        const newErrors = {
-            es: !es.trim(),
-            ru: !ru.trim()
-        };
+        const esError = validateEs(es);
+        const ruError = validateRu(ru);
 
-        setErrors(newErrors);
+        setErrors({ es: esError, ru: ruError });
+        setTouched({ es: true, ru: true });
 
-        if (newErrors.es || newErrors.ru) {
-            const emptyFields = [];
-            if (newErrors.es) emptyFields.push('Español');
-            if (newErrors.ru) emptyFields.push('Русский');
-
-            alert(`Por favor, complete los siguientes campos: ${emptyFields.join(', ')}`);
+        if (esError || ruError) {
+            toast.warning('Por favor, completa todos los campos correctamente');
             return;
         }
 
@@ -122,60 +167,61 @@ function VocabularioForm({ word, onClose }) {
 
         try {
             if (word) {
-                // Редактирование: проверяем дубликаты, кроме самого себя
                 const duplicate = allWords.find(w =>
-                        w.id !== word.id && (
-                            w.es.toLowerCase().trim() === wordData.es.toLowerCase() ||
-                            w.ru.toLowerCase().trim() === wordData.ru.toLowerCase()
-                        )
+                    w.id !== word.id &&
+                    w.es.toLowerCase().trim() === wordData.es.toLowerCase() &&
+                    w.ru.toLowerCase().trim() === wordData.ru.toLowerCase()
                 );
 
                 if (duplicate) {
-                    alert(`⚠️ Esta palabra ya existe:\n${duplicate.es} - ${duplicate.ru}`);
+                    toast.warning(`Esta combinación ya existe: ${duplicate.es} - ${duplicate.ru} (${duplicate.nivel})`);
                     setLoading(false);
                     return;
                 }
 
                 await updateDoc(doc(db, 'vocabulario', word.id), wordData);
-                console.log('Palabra actualizada:', word.id);
-                alert('Palabra actualizada exitosamente');
-                onClose(); // Всегда закрываем при редактировании
+                toast.success('Palabra actualizada');
+                onClose();
             } else {
-                // роверяем дубликаты
                 const duplicate = allWords.find(w =>
-                    w.es.toLowerCase().trim() === wordData.es.toLowerCase() ||
+                    w.es.toLowerCase().trim() === wordData.es.toLowerCase() &&
                     w.ru.toLowerCase().trim() === wordData.ru.toLowerCase()
                 );
 
                 if (duplicate) {
-                    const confirmAdd = window.confirm(
-                        `⚠️ Esta palabra ya existe:\n${duplicate.es} - ${duplicate.ru}\n\n¿Desea añadirla de todos modos?`
-                    );
-                    if (!confirmAdd) {
-                        setLoading(false);
-                        return;
-                    }
+                    toast.error(`⚠️ Esta palabra ya existe:\n${duplicate.es} - ${duplicate.ru} (${duplicate.nivel})`);
+
+                    setErrors({
+                        es: 'Esta combinación ya existe',
+                        ru: 'Эта комбинация уже существует'
+                    });
+                    setTouched({ es: true, ru: true });
+
+                    setLoading(false);
+                    return;
                 }
 
-                const docRef = await addDoc(collection(db, 'vocabulario'), wordData);
-                console.log('Palabra añadida:', docRef.id);
+                await addDoc(collection(db, 'vocabulario'), wordData);
 
-                // Если quickAdd включен, очищаем форму и продолжаем
                 if (quickAdd) {
                     clearForm();
                     await loadAllWords();
+                    toast.success('Palabra añadida');
                 } else {
-                    alert('Palabra añadida exitosamente');
+                    toast.success('Palabra añadida');
                     onClose();
                 }
             }
         } catch (error) {
             console.error('Error al guardar:', error);
-            alert('Error al guardar: ' + error.message);
+            toast.error('Error al guardar: ' + error.message);
         } finally {
             setLoading(false);
         }
     };
+
+    const isEsValid = !errors.es && es.trim().length > 0;
+    const isRuValid = !errors.ru && ru.trim().length > 0;
 
     return (
         <div className="modal-overlay" onClick={onClose}>
@@ -201,20 +247,34 @@ function VocabularioForm({ word, onClose }) {
                     </div>
 
                     <div className="form-group autocomplete-group">
-                        <label>Español:</label>
-                        <input
-                            type="text"
-                            value={es}
-                            onChange={(e) => handleEsChange(e.target.value)}
-                            onFocus={() => es.length >= 3 && setShowEsSuggestions(esSuggestions.length > 0)}
-                            onBlur={() => setTimeout(() => setShowEsSuggestions(false), 200)}
-                            placeholder="la casa"
-                            disabled={loading}
-                            autoComplete="off"
-                            className={errors.es ? 'input-error' : ''}
-                        />
-                        {errors.es && (
-                            <span className="error-message">Este campo es obligatorio</span>
+                        <label>
+                            Español:
+                            <span className="required-mark">*</span>
+                        </label>
+                        <div className="input-wrapper">
+                            <input
+                                type="text"
+                                value={es}
+                                onChange={(e) => handleEsChange(e.target.value)}
+                                onFocus={() => es.length >= 3 && setShowEsSuggestions(esSuggestions.length > 0)}
+                                onBlur={() => {
+                                    setTimeout(() => setShowEsSuggestions(false), 200);
+                                    handleEsBlur();
+                                }}
+                                placeholder="la casa"
+                                disabled={loading}
+                                autoComplete="off"
+                                className={`${errors.es ? 'input-error' : ''} ${isEsValid ? 'input-success' : ''}`}
+                            />
+                            {isEsValid && !showEsSuggestions && (
+                                <span className="validation-icon success-icon">✓</span>
+                            )}
+                            {errors.es && touched.es && (
+                                <span className="validation-icon error-icon">✕</span>
+                            )}
+                        </div>
+                        {errors.es && touched.es && (
+                            <span className="error-message">{errors.es}</span>
                         )}
                         {showEsSuggestions && (
                             <div className="suggestions-dropdown">
@@ -245,20 +305,34 @@ function VocabularioForm({ word, onClose }) {
                     </div>
 
                     <div className="form-group autocomplete-group">
-                        <label>Русский:</label>
-                        <input
-                            type="text"
-                            value={ru}
-                            onChange={(e) => handleRuChange(e.target.value)}
-                            onFocus={() => ru.length >= 3 && setShowRuSuggestions(ruSuggestions.length > 0)}
-                            onBlur={() => setTimeout(() => setShowRuSuggestions(false), 200)}
-                            placeholder="дом"
-                            disabled={loading}
-                            autoComplete="off"
-                            className={errors.ru ? 'input-error' : ''}
-                        />
-                        {errors.ru && (
-                            <span className="error-message">Это поле обязательно</span>
+                        <label>
+                            Русский:
+                            <span className="required-mark">*</span>
+                        </label>
+                        <div className="input-wrapper">
+                            <input
+                                type="text"
+                                value={ru}
+                                onChange={(e) => handleRuChange(e.target.value)}
+                                onFocus={() => ru.length >= 3 && setShowRuSuggestions(ruSuggestions.length > 0)}
+                                onBlur={() => {
+                                    setTimeout(() => setShowRuSuggestions(false), 200);
+                                    handleRuBlur();
+                                }}
+                                placeholder="дом"
+                                disabled={loading}
+                                autoComplete="off"
+                                className={`${errors.ru ? 'input-error' : ''} ${isRuValid ? 'input-success' : ''}`}
+                            />
+                            {isRuValid && !showRuSuggestions && (
+                                <span className="validation-icon success-icon">✓</span>
+                            )}
+                            {errors.ru && touched.ru && (
+                                <span className="validation-icon error-icon">✕</span>
+                            )}
+                        </div>
+                        {errors.ru && touched.ru && (
+                            <span className="error-message">{errors.ru}</span>
                         )}
                         {showRuSuggestions && (
                             <div className="suggestions-dropdown">
@@ -288,7 +362,6 @@ function VocabularioForm({ word, onClose }) {
                         )}
                     </div>
 
-                    {/* Quick Add Checkbox */}
                     {!word && (
                         <div className="quick-add-checkbox">
                             <input
@@ -298,9 +371,14 @@ function VocabularioForm({ word, onClose }) {
                                 onChange={(e) => setQuickAdd(e.target.checked)}
                                 disabled={loading}
                             />
-                            <label htmlFor="quickAdd">⚡ Guardar y añadir otra palabra</label>
+                            <label htmlFor="quickAdd">Guardar y añadir otra palabra</label>
                         </div>
                     )}
+
+                    <div className="keyboard-hints">
+                        <span>Esc - cancelar</span>
+                        <span>Ctrl/Cmd + Enter - guardar</span>
+                    </div>
 
                     <div className="form-actions">
                         <button

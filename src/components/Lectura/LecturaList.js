@@ -3,6 +3,8 @@ import { collection, query, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import LecturaForm from './LecturaForm';
 import Pagination from '../common/Pagination';
+import EmptyState from '../common/EmptyState';
+import LoadingSkeleton from '../common/LoadingSkeleton';
 import { useToast } from '../common/Toast';
 import './Lectura.css';
 
@@ -152,10 +154,26 @@ function LecturaList() {
                 </div>
 
                 {loading ? (
-                    <div className="loading">Cargando lecturas...</div>
+                    <LoadingSkeleton rows={8} />
+                ) : filteredLecturas.length === 0 ? (
+                    searchTerm ? (
+                        <EmptyState
+                            icon="🔍"
+                            title="No se encontraron lecturas"
+                            description={`No hay resultados para "${searchTerm}"`}
+                        />
+                    ) : (
+                        <EmptyState
+                            icon="📖"
+                            title={selectedNivel ? `No hay lecturas en ${selectedNivel}` : "No hay lecturas todavía"}
+                            description={selectedNivel ? `Comienza añadiendo lecturas de nivel ${selectedNivel}` : "Comienza añadiendo tu primera lectura"}
+                            actionText="+ Añadir primera lectura"
+                            onAction={() => setShowForm(true)}
+                        />
+                    )
                 ) : (
                     <div className="content-area">
-                        <table className="data-table">
+                        <table className="data-table sticky-header">
                             <thead>
                             <tr>
                                 <th>Nivel</th>
@@ -198,14 +216,6 @@ function LecturaList() {
                             ))}
                             </tbody>
                         </table>
-
-                        {filteredLecturas.length === 0 && (
-                            <div className="no-results">
-                                {searchTerm
-                                    ? 'No se encontraron lecturas'
-                                    : 'No hay lecturas todavía'}
-                            </div>
-                        )}
                     </div>
                 )}
 
