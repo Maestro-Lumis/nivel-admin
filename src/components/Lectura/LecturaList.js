@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import LecturaForm from './LecturaForm';
@@ -20,6 +20,7 @@ function LecturaList() {
     const [showForm, setShowForm] = useState(false);
     const [editingLectura, setEditingLectura] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
+    const [sortConfig, setSortConfig] = useState({ key: 'pregunta', direction: 'ascending' });
 
     const toast = useToast();
 
@@ -49,10 +50,7 @@ function LecturaList() {
                 displayData = allData;
             }
 
-            displayData.sort((a, b) => a.pregunta.localeCompare(b.pregunta));
             setLecturas(displayData);
-
-            console.log(`Cargadas ${displayData.length} lecturas`);
         } catch (error) {
             console.error('Error al cargar lecturas:', error);
             toast.error('Error al cargar lecturas');
@@ -85,15 +83,50 @@ function LecturaList() {
         loadLecturas();
     };
 
-    const filteredLecturas = lecturas.filter(lectura =>
-        lectura.pregunta.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        lectura.texto.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const requestSort = (key) => {
+        let direction = 'ascending';
+        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
 
-    const totalPages = Math.ceil(filteredLecturas.length / ITEMS_PER_PAGE);
+    const getSortIcon = (columnKey) => {
+        if (sortConfig.key !== columnKey) {
+            return '⇅';
+        }
+        return sortConfig.direction === 'ascending' ? '↑' : '↓';
+    };
+
+    const filteredLecturas = useMemo(() => {
+        return lecturas.filter(lectura =>
+            lectura.pregunta.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            lectura.texto.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [lecturas, searchTerm]);
+
+    const sortedLecturas = useMemo(() => {
+        let sortable = [...filteredLecturas];
+        if (sortConfig !== null) {
+            sortable.sort((a, b) => {
+                const aValue = a[sortConfig.key];
+                const bValue = b[sortConfig.key];
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        return sortable;
+    }, [filteredLecturas, sortConfig]);
+
+    const totalPages = Math.ceil(sortedLecturas.length / ITEMS_PER_PAGE);
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const endIndex = startIndex + ITEMS_PER_PAGE;
-    const paginatedLecturas = filteredLecturas.slice(startIndex, endIndex);
+    const paginatedLecturas = sortedLecturas.slice(startIndex, endIndex);
 
     const getCountByNivel = (nivel) => {
         return allLecturas.filter(l => l.nivel === nivel).length;
@@ -155,7 +188,7 @@ function LecturaList() {
 
                 {loading ? (
                     <LoadingSkeleton rows={8} />
-                ) : filteredLecturas.length === 0 ? (
+                ) : sortedLecturas.length === 0 ? (
                     searchTerm ? (
                         <EmptyState
                             icon="🔍"
@@ -176,8 +209,12 @@ function LecturaList() {
                         <table className="data-table sticky-header">
                             <thead>
                             <tr>
-                                <th>Nivel</th>
-                                <th>Pregunta</th>
+                                <th className="sortable-header" onClick={() => requestSort('nivel')}>
+                                    Nivel <span className="sort-icon">{getSortIcon('nivel')}</span>
+                                </th>
+                                <th className="sortable-header" onClick={() => requestSort('pregunta')}>
+                                    Pregunta <span className="sort-icon">{getSortIcon('pregunta')}</span>
+                                </th>
                                 <th>Texto (preview)</th>
                                 <th>Opciones</th>
                                 <th>Acciones</th>
@@ -199,16 +236,10 @@ function LecturaList() {
                                         {lectura.opciones?.length || 0} opciones
                                     </td>
                                     <td className="actions">
-                                        <button
-                                            className="btn-edit"
-                                            onClick={() => handleEdit(lectura)}
-                                        >
+                                        <button className="btn-edit" onClick={() => handleEdit(lectura)}>
                                             Editar
                                         </button>
-                                        <button
-                                            className="btn-delete"
-                                            onClick={() => handleDelete(lectura.id, lectura.pregunta)}
-                                        >
+                                        <button className="btn-delete" onClick={() => handleDelete(lectura.id, lectura.pregunta)}>
                                             Eliminar
                                         </button>
                                     </td>
@@ -222,7 +253,7 @@ function LecturaList() {
                 <Pagination
                     currentPage={currentPage}
                     totalPages={totalPages}
-                    totalItems={filteredLecturas.length}
+                    totalItems={sortedLecturas.length}
                     itemsPerPage={ITEMS_PER_PAGE}
                     onPageChange={setCurrentPage}
                 />

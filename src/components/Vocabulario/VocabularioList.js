@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import VocabularioForm from './VocabularioForm';
@@ -22,6 +22,7 @@ function VocabularioList() {
     const [showBulkImport, setShowBulkImport] = useState(false);
     const [editingWord, setEditingWord] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
+    const [sortConfig, setSortConfig] = useState({ key: 'es', direction: 'ascending' });
 
     const toast = useToast();
 
@@ -51,10 +52,7 @@ function VocabularioList() {
                 displayData = allData;
             }
 
-            displayData.sort((a, b) => a.es.localeCompare(b.es));
             setWords(displayData);
-
-            console.log(`Cargadas ${displayData.length} palabras (total: ${allData.length})`);
         } catch (error) {
             console.error('Error al cargar palabras:', error);
             toast.error('Error al cargar palabras');
@@ -68,7 +66,6 @@ function VocabularioList() {
 
         try {
             await deleteDoc(doc(db, 'vocabulario', wordId));
-            console.log('Palabra eliminada:', wordId);
             toast.success('Palabra eliminada');
             loadWords();
         } catch (error) {
@@ -93,15 +90,51 @@ function VocabularioList() {
         loadWords();
     };
 
-    const filteredWords = words.filter(word =>
-        word.es.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        word.ru.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const requestSort = (key) => {
+        let direction = 'ascending';
+        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
 
-    const totalPages = Math.ceil(filteredWords.length / ITEMS_PER_PAGE);
+    const getSortIcon = (columnKey) => {
+        if (sortConfig.key !== columnKey) {
+            return '⇅';
+        }
+        return sortConfig.direction === 'ascending' ? '↑' : '↓';
+    };
+
+    const filteredWords = useMemo(() => {
+        return words.filter(word =>
+            word.es.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            word.ru.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [words, searchTerm]);
+
+    const sortedWords = useMemo(() => {
+        let sortableWords = [...filteredWords];
+        if (sortConfig !== null) {
+            sortableWords.sort((a, b) => {
+                const aValue = a[sortConfig.key];
+                const bValue = b[sortConfig.key];
+
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        return sortableWords;
+    }, [filteredWords, sortConfig]);
+
+    const totalPages = Math.ceil(sortedWords.length / ITEMS_PER_PAGE);
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const endIndex = startIndex + ITEMS_PER_PAGE;
-    const paginatedWords = filteredWords.slice(startIndex, endIndex);
+    const paginatedWords = sortedWords.slice(startIndex, endIndex);
 
     const getCountByNivel = (nivel) => {
         return allWords.filter(w => w.nivel === nivel).length;
@@ -168,7 +201,7 @@ function VocabularioList() {
 
                 {loading ? (
                     <LoadingSkeleton rows={10} />
-                ) : filteredWords.length === 0 ? (
+                ) : sortedWords.length === 0 ? (
                     searchTerm ? (
                         <EmptyState
                             icon="🔍"
@@ -189,9 +222,24 @@ function VocabularioList() {
                         <table className="data-table sticky-header">
                             <thead>
                             <tr>
-                                <th>Nivel</th>
-                                <th>Español</th>
-                                <th>Русский</th>
+                                <th
+                                    className="sortable-header"
+                                    onClick={() => requestSort('nivel')}
+                                >
+                                    Nivel <span className="sort-icon">{getSortIcon('nivel')}</span>
+                                </th>
+                                <th
+                                    className="sortable-header"
+                                    onClick={() => requestSort('es')}
+                                >
+                                    Español <span className="sort-icon">{getSortIcon('es')}</span>
+                                </th>
+                                <th
+                                    className="sortable-header"
+                                    onClick={() => requestSort('ru')}
+                                >
+                                    Русский <span className="sort-icon">{getSortIcon('ru')}</span>
+                                </th>
                                 <th>Acciones</th>
                             </tr>
                             </thead>
@@ -229,7 +277,7 @@ function VocabularioList() {
                 <Pagination
                     currentPage={currentPage}
                     totalPages={totalPages}
-                    totalItems={filteredWords.length}
+                    totalItems={sortedWords.length}
                     itemsPerPage={ITEMS_PER_PAGE}
                     onPageChange={setCurrentPage}
                 />

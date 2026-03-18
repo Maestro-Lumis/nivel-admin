@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import AudioForm from './AudioForm';
@@ -20,6 +20,7 @@ function AudioList() {
     const [showForm, setShowForm] = useState(false);
     const [editingAudio, setEditingAudio] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
+    const [sortConfig, setSortConfig] = useState({ key: 'pregunta', direction: 'ascending' });
 
     const toast = useToast();
 
@@ -49,10 +50,7 @@ function AudioList() {
                 displayData = allData;
             }
 
-            displayData.sort((a, b) => a.pregunta.localeCompare(b.pregunta));
             setAudios(displayData);
-
-            console.log(`Cargados ${displayData.length} audios`);
         } catch (error) {
             console.error('Error al cargar audios:', error);
             toast.error('Error al cargar audios');
@@ -85,15 +83,50 @@ function AudioList() {
         loadAudios();
     };
 
-    const filteredAudios = audios.filter(audio =>
-        audio.pregunta.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (audio.audioUrl && audio.audioUrl.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    const requestSort = (key) => {
+        let direction = 'ascending';
+        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
 
-    const totalPages = Math.ceil(filteredAudios.length / ITEMS_PER_PAGE);
+    const getSortIcon = (columnKey) => {
+        if (sortConfig.key !== columnKey) {
+            return '⇅';
+        }
+        return sortConfig.direction === 'ascending' ? '↑' : '↓';
+    };
+
+    const filteredAudios = useMemo(() => {
+        return audios.filter(audio =>
+            audio.pregunta.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (audio.audioUrl && audio.audioUrl.toLowerCase().includes(searchTerm.toLowerCase()))
+        );
+    }, [audios, searchTerm]);
+
+    const sortedAudios = useMemo(() => {
+        let sortable = [...filteredAudios];
+        if (sortConfig !== null) {
+            sortable.sort((a, b) => {
+                const aValue = a[sortConfig.key];
+                const bValue = b[sortConfig.key];
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        return sortable;
+    }, [filteredAudios, sortConfig]);
+
+    const totalPages = Math.ceil(sortedAudios.length / ITEMS_PER_PAGE);
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const endIndex = startIndex + ITEMS_PER_PAGE;
-    const paginatedAudios = filteredAudios.slice(startIndex, endIndex);
+    const paginatedAudios = sortedAudios.slice(startIndex, endIndex);
 
     const getCountByNivel = (nivel) => {
         return allAudios.filter(a => a.nivel === nivel).length;
@@ -155,7 +188,7 @@ function AudioList() {
 
                 {loading ? (
                     <LoadingSkeleton rows={8} />
-                ) : filteredAudios.length === 0 ? (
+                ) : sortedAudios.length === 0 ? (
                     searchTerm ? (
                         <EmptyState
                             icon="🔍"
@@ -176,8 +209,12 @@ function AudioList() {
                         <table className="data-table sticky-header">
                             <thead>
                             <tr>
-                                <th>Nivel</th>
-                                <th>Pregunta</th>
+                                <th className="sortable-header" onClick={() => requestSort('nivel')}>
+                                    Nivel <span className="sort-icon">{getSortIcon('nivel')}</span>
+                                </th>
+                                <th className="sortable-header" onClick={() => requestSort('pregunta')}>
+                                    Pregunta <span className="sort-icon">{getSortIcon('pregunta')}</span>
+                                </th>
                                 <th>Audio</th>
                                 <th>Opciones</th>
                                 <th>Acciones</th>
@@ -205,16 +242,10 @@ function AudioList() {
                                         {audio.opciones?.length || 0} opciones
                                     </td>
                                     <td className="actions">
-                                        <button
-                                            className="btn-edit"
-                                            onClick={() => handleEdit(audio)}
-                                        >
+                                        <button className="btn-edit" onClick={() => handleEdit(audio)}>
                                             Editar
                                         </button>
-                                        <button
-                                            className="btn-delete"
-                                            onClick={() => handleDelete(audio.id, audio.pregunta)}
-                                        >
+                                        <button className="btn-delete" onClick={() => handleDelete(audio.id, audio.pregunta)}>
                                             Eliminar
                                         </button>
                                     </td>
@@ -228,7 +259,7 @@ function AudioList() {
                 <Pagination
                     currentPage={currentPage}
                     totalPages={totalPages}
-                    totalItems={filteredAudios.length}
+                    totalItems={sortedAudios.length}
                     itemsPerPage={ITEMS_PER_PAGE}
                     onPageChange={setCurrentPage}
                 />

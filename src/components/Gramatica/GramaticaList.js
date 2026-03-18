@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import GramaticaBulkImport from './GramaticaBulkImport';
@@ -22,6 +22,7 @@ function GramaticaList() {
     const [showBulkImport, setShowBulkImport] = useState(false);
     const [editingQuestion, setEditingQuestion] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
+    const [sortConfig, setSortConfig] = useState({ key: 'pregunta', direction: 'ascending' });
 
     const toast = useToast();
 
@@ -51,10 +52,7 @@ function GramaticaList() {
                 displayData = allData;
             }
 
-            displayData.sort((a, b) => a.pregunta.localeCompare(b.pregunta));
             setQuestions(displayData);
-
-            console.log(`Cargadas ${displayData.length} preguntas`);
         } catch (error) {
             console.error('Error:', error);
             toast.error('Error al cargar preguntas');
@@ -92,14 +90,49 @@ function GramaticaList() {
         loadQuestions();
     };
 
-    const filteredQuestions = questions.filter(q =>
-        q.pregunta.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const requestSort = (key) => {
+        let direction = 'ascending';
+        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+            direction = 'descending';
+        }
+        setSortConfig({ key, direction });
+    };
 
-    const totalPages = Math.ceil(filteredQuestions.length / ITEMS_PER_PAGE);
+    const getSortIcon = (columnKey) => {
+        if (sortConfig.key !== columnKey) {
+            return '⇅';
+        }
+        return sortConfig.direction === 'ascending' ? '↑' : '↓';
+    };
+
+    const filteredQuestions = useMemo(() => {
+        return questions.filter(q =>
+            q.pregunta.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [questions, searchTerm]);
+
+    const sortedQuestions = useMemo(() => {
+        let sortable = [...filteredQuestions];
+        if (sortConfig !== null) {
+            sortable.sort((a, b) => {
+                const aValue = a[sortConfig.key];
+                const bValue = b[sortConfig.key];
+                if (aValue < bValue) {
+                    return sortConfig.direction === 'ascending' ? -1 : 1;
+                }
+                if (aValue > bValue) {
+                    return sortConfig.direction === 'ascending' ? 1 : -1;
+                }
+                return 0;
+            });
+        }
+        return sortable;
+    }, [filteredQuestions, sortConfig]);
+
+    const totalPages = Math.ceil(sortedQuestions.length / ITEMS_PER_PAGE);
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const endIndex = startIndex + ITEMS_PER_PAGE;
-    const paginatedQuestions = filteredQuestions.slice(startIndex, endIndex);
+    const paginatedQuestions = sortedQuestions.slice(startIndex, endIndex);
 
     const getCountByNivel = (nivel) => {
         return allQuestions.filter(q => q.nivel === nivel).length;
@@ -175,7 +208,7 @@ function GramaticaList() {
 
                 {loading ? (
                     <LoadingSkeleton rows={8} />
-                ) : filteredQuestions.length === 0 ? (
+                ) : sortedQuestions.length === 0 ? (
                     searchTerm ? (
                         <EmptyState
                             icon="🔍"
@@ -196,9 +229,15 @@ function GramaticaList() {
                         <table className="data-table sticky-header">
                             <thead>
                             <tr>
-                                <th>Nivel</th>
-                                <th>Tipo</th>
-                                <th>Pregunta</th>
+                                <th className="sortable-header" onClick={() => requestSort('nivel')}>
+                                    Nivel <span className="sort-icon">{getSortIcon('nivel')}</span>
+                                </th>
+                                <th className="sortable-header" onClick={() => requestSort('tipo')}>
+                                    Tipo <span className="sort-icon">{getSortIcon('tipo')}</span>
+                                </th>
+                                <th className="sortable-header" onClick={() => requestSort('pregunta')}>
+                                    Pregunta <span className="sort-icon">{getSortIcon('pregunta')}</span>
+                                </th>
                                 <th>Items</th>
                                 <th>Acciones</th>
                             </tr>
@@ -245,7 +284,7 @@ function GramaticaList() {
                 <Pagination
                     currentPage={currentPage}
                     totalPages={totalPages}
-                    totalItems={filteredQuestions.length}
+                    totalItems={sortedQuestions.length}
                     itemsPerPage={ITEMS_PER_PAGE}
                     onPageChange={setCurrentPage}
                 />
