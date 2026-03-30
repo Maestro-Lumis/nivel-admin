@@ -5,12 +5,14 @@ import LecturaList from './components/Lectura/LecturaList';
 import AudioList from './components/Audio/AudioList';
 import GramaticaList from './components/Gramatica/GramaticaList';
 import { ToastProvider } from './components/common/Toast';
+import ConfirmDialog from './components/common/ConfirmDialog';
 import './App.css';
 
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeModule, setActiveModule] = useState('vocabulario');
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('adminUser');
@@ -20,11 +22,10 @@ function App() {
     setLoading(false);
   }, []);
 
-  const handleLogout = () => {
-    if (window.confirm('¿Cerrar sesión?')) {
-      localStorage.removeItem('adminUser');
-      setUser(null);
-    }
+  const handleLogoutConfirmed = () => {
+    setShowLogoutConfirm(false);
+    localStorage.removeItem('adminUser');
+    setUser(null);
   };
 
   if (loading) {
@@ -74,7 +75,7 @@ function App() {
               </div>
               <div className="nav-right">
                 <span className="user-email">{user.username}</span>
-                <button className="btn-logout" onClick={handleLogout}>
+                <button className="btn-logout" onClick={() => setShowLogoutConfirm(true)}>
                   Salir
                 </button>
               </div>
@@ -87,6 +88,17 @@ function App() {
             {activeModule === 'audio' && <AudioList />}
             {activeModule === 'gramatica' && <GramaticaList />}
           </main>
+
+          <ConfirmDialog
+              isOpen={showLogoutConfirm}
+              title="¿Cerrar sesión?"
+              message="Se cerrará tu sesión de administrador."
+              confirmText="Salir"
+              cancelText="Cancelar"
+              variant="warning"
+              onConfirm={handleLogoutConfirmed}
+              onCancel={() => setShowLogoutConfirm(false)}
+          />
         </div>
       </ToastProvider>
   );

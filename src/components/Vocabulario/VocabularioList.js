@@ -7,6 +7,7 @@ import Pagination from '../common/Pagination';
 import EmptyState from '../common/EmptyState';
 import LoadingSkeleton from '../common/LoadingSkeleton';
 import { useToast } from '../common/Toast';
+import ConfirmDialog from '../common/ConfirmDialog';
 import './Vocabulario.css';
 
 const NIVELES = ['A1', 'A2', 'B1', 'B2'];
@@ -23,6 +24,13 @@ function VocabularioList() {
     const [editingWord, setEditingWord] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [sortConfig, setSortConfig] = useState({ key: 'es', direction: 'ascending' });
+
+    // Confirm dialog state
+    const [confirmDialog, setConfirmDialog] = useState({
+        isOpen: false,
+        wordId: null,
+        wordEs: '',
+    });
 
     const toast = useToast();
 
@@ -45,12 +53,9 @@ function VocabularioList() {
             });
             setAllWords(allData);
 
-            let displayData;
-            if (selectedNivel) {
-                displayData = allData.filter(w => w.nivel === selectedNivel);
-            } else {
-                displayData = allData;
-            }
+            const displayData = selectedNivel
+                ? allData.filter(w => w.nivel === selectedNivel)
+                : allData;
 
             setWords(displayData);
         } catch (error) {
@@ -61,17 +66,27 @@ function VocabularioList() {
         }
     };
 
-    const handleDelete = async (wordId, wordEs) => {
-        if (!window.confirm(`¿Eliminar "${wordEs}"?`)) return;
+    // Delete flow
+    const handleDeleteRequest = (wordId, wordEs) => {
+        setConfirmDialog({ isOpen: true, wordId, wordEs });
+    };
+
+    const handleDeleteConfirmed = async () => {
+        const { wordId, wordEs } = confirmDialog;
+        setConfirmDialog({ isOpen: false, wordId: null, wordEs: '' });
 
         try {
             await deleteDoc(doc(db, 'vocabulario', wordId));
-            toast.success('Palabra eliminada');
+            toast.success(`"${wordEs}" eliminada`);
             loadWords();
         } catch (error) {
             console.error('Error al eliminar:', error);
             toast.error('Error al eliminar');
         }
+    };
+
+    const handleDeleteCancelled = () => {
+        setConfirmDialog({ isOpen: false, wordId: null, wordEs: '' });
     };
 
     const handleEdit = (word) => {
@@ -91,17 +106,15 @@ function VocabularioList() {
     };
 
     const requestSort = (key) => {
-        let direction = 'ascending';
-        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-            direction = 'descending';
-        }
+        const direction =
+            sortConfig.key === key && sortConfig.direction === 'ascending'
+                ? 'descending'
+                : 'ascending';
         setSortConfig({ key, direction });
     };
 
     const getSortIcon = (columnKey) => {
-        if (sortConfig.key !== columnKey) {
-            return '⇅';
-        }
+        if (sortConfig.key !== columnKey) return '⇅';
         return sortConfig.direction === 'ascending' ? '↑' : '↓';
     };
 
@@ -113,35 +126,26 @@ function VocabularioList() {
     }, [words, searchTerm]);
 
     const sortedWords = useMemo(() => {
-        let sortableWords = [...filteredWords];
-        if (sortConfig !== null) {
-            sortableWords.sort((a, b) => {
-                const aValue = a[sortConfig.key];
-                const bValue = b[sortConfig.key];
-
-                if (aValue < bValue) {
-                    return sortConfig.direction === 'ascending' ? -1 : 1;
-                }
-                if (aValue > bValue) {
-                    return sortConfig.direction === 'ascending' ? 1 : -1;
-                }
-                return 0;
-            });
-        }
-        return sortableWords;
+        const sortable = [...filteredWords];
+        sortable.sort((a, b) => {
+            const aVal = a[sortConfig.key];
+            const bVal = b[sortConfig.key];
+            if (aVal < bVal) return sortConfig.direction === 'ascending' ? -1 : 1;
+            if (aVal > bVal) return sortConfig.direction === 'ascending' ? 1 : -1;
+            return 0;
+        });
+        return sortable;
     }, [filteredWords, sortConfig]);
 
     const totalPages = Math.ceil(sortedWords.length / ITEMS_PER_PAGE);
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    const paginatedWords = sortedWords.slice(startIndex, endIndex);
+    const paginatedWords = sortedWords.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
-    const getCountByNivel = (nivel) => {
-        return allWords.filter(w => w.nivel === nivel).length;
-    };
+    const getCountByNivel = (nivel) => allWords.filter(w => w.nivel === nivel).length;
 
     return (
         <div className="split-container">
+            {/*Sidebar*/}
             <div className="sidebar">
                 <div className="sidebar-header">
                     <h2>Niveles</h2>
@@ -171,6 +175,7 @@ function VocabularioList() {
                 </div>
             </div>
 
+            {/* Main panel */}
             <div className="main-panel">
                 <div className="panel-header">
                     <div className="header-top">
@@ -211,8 +216,12 @@ function VocabularioList() {
                     ) : (
                         <EmptyState
                             icon="📚"
-                            title={selectedNivel ? `No hay palabras en ${selectedNivel}` : "No hay palabras todavía"}
-                            description={selectedNivel ? `Comienza añadiendo palabras de nivel ${selectedNivel}` : "Comienza añadiendo tu primera palabra"}
+                            title={selectedNivel ? `No hay palabras en ${selectedNivel}` : 'No hay palabras todavía'}
+                            description={
+                                selectedNivel
+                                    ? `Comienza añadiendo palabras de nivel ${selectedNivel}`
+                                    : 'Comienza añadiendo tu primera palabra'
+                            }
                             actionText="+ Añadir primera palabra"
                             onAction={() => setShowForm(true)}
                         />
@@ -222,22 +231,13 @@ function VocabularioList() {
                         <table className="data-table sticky-header">
                             <thead>
                             <tr>
-                                <th
-                                    className="sortable-header"
-                                    onClick={() => requestSort('nivel')}
-                                >
+                                <th className="sortable-header" onClick={() => requestSort('nivel')}>
                                     Nivel <span className="sort-icon">{getSortIcon('nivel')}</span>
                                 </th>
-                                <th
-                                    className="sortable-header"
-                                    onClick={() => requestSort('es')}
-                                >
+                                <th className="sortable-header" onClick={() => requestSort('es')}>
                                     Español <span className="sort-icon">{getSortIcon('es')}</span>
                                 </th>
-                                <th
-                                    className="sortable-header"
-                                    onClick={() => requestSort('ru')}
-                                >
+                                <th className="sortable-header" onClick={() => requestSort('ru')}>
                                     Русский <span className="sort-icon">{getSortIcon('ru')}</span>
                                 </th>
                                 <th>Acciones</th>
@@ -247,9 +247,9 @@ function VocabularioList() {
                             {paginatedWords.map(word => (
                                 <tr key={word.id}>
                                     <td>
-                                        <span className={`badge nivel-${word.nivel.toLowerCase()}`}>
-                                            {word.nivel}
-                                        </span>
+                                            <span className={`badge nivel-${word.nivel.toLowerCase()}`}>
+                                                {word.nivel}
+                                            </span>
                                     </td>
                                     <td className="word-es">{word.es}</td>
                                     <td className="word-ru">{word.ru}</td>
@@ -262,7 +262,7 @@ function VocabularioList() {
                                         </button>
                                         <button
                                             className="btn-delete"
-                                            onClick={() => handleDelete(word.id, word.es)}
+                                            onClick={() => handleDeleteRequest(word.id, word.es)}
                                         >
                                             Eliminar
                                         </button>
@@ -295,6 +295,17 @@ function VocabularioList() {
                     onClose={handleBulkImportClose}
                 />
             )}
+
+            <ConfirmDialog
+                isOpen={confirmDialog.isOpen}
+                title="¿Eliminar palabra?"
+                message={`¿Seguro que quieres eliminar "${confirmDialog.wordEs}"? Esta acción no se puede deshacer.`}
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                variant="danger"
+                onConfirm={handleDeleteConfirmed}
+                onCancel={handleDeleteCancelled}
+            />
         </div>
     );
 }
