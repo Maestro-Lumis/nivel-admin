@@ -6,6 +6,7 @@ import Pagination from '../common/Pagination';
 import EmptyState from '../common/EmptyState';
 import LoadingSkeleton from '../common/LoadingSkeleton';
 import { useToast } from '../common/Toast';
+import ConfirmDialog from '../common/ConfirmDialog';
 import './Audio.css';
 
 const NIVELES = ['A1', 'A2', 'B1', 'B2'];
@@ -21,6 +22,12 @@ function AudioList() {
     const [editingAudio, setEditingAudio] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [sortConfig, setSortConfig] = useState({ key: 'pregunta', direction: 'ascending' });
+
+    const [confirmDialog, setConfirmDialog] = useState({
+        isOpen: false,
+        audioId: null,
+        pregunta: '',
+    });
 
     const toast = useToast();
 
@@ -43,12 +50,9 @@ function AudioList() {
             });
             setAllAudios(allData);
 
-            let displayData;
-            if (selectedNivel) {
-                displayData = allData.filter(a => a.nivel === selectedNivel);
-            } else {
-                displayData = allData;
-            }
+            const displayData = selectedNivel
+                ? allData.filter(a => a.nivel === selectedNivel)
+                : allData;
 
             setAudios(displayData);
         } catch (error) {
@@ -59,17 +63,26 @@ function AudioList() {
         }
     };
 
-    const handleDelete = async (audioId, pregunta) => {
-        if (!window.confirm(`¿Eliminar "${pregunta}"?`)) return;
+    const handleDeleteRequest = (audioId, pregunta) => {
+        setConfirmDialog({ isOpen: true, audioId, pregunta });
+    };
+
+    const handleDeleteConfirmed = async () => {
+        const { audioId, pregunta } = confirmDialog;
+        setConfirmDialog({ isOpen: false, audioId: null, pregunta: '' });
 
         try {
             await deleteDoc(doc(db, 'audio', audioId));
-            toast.success('Audio eliminado');
+            toast.success(`"${pregunta}" eliminado`);
             loadAudios();
         } catch (error) {
             console.error('Error al eliminar:', error);
             toast.error('Error al eliminar');
         }
+    };
+
+    const handleDeleteCancelled = () => {
+        setConfirmDialog({ isOpen: false, audioId: null, pregunta: '' });
     };
 
     const handleEdit = (audio) => {
@@ -84,17 +97,15 @@ function AudioList() {
     };
 
     const requestSort = (key) => {
-        let direction = 'ascending';
-        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-            direction = 'descending';
-        }
+        const direction =
+            sortConfig.key === key && sortConfig.direction === 'ascending'
+                ? 'descending'
+                : 'ascending';
         setSortConfig({ key, direction });
     };
 
     const getSortIcon = (columnKey) => {
-        if (sortConfig.key !== columnKey) {
-            return '⇅';
-        }
+        if (sortConfig.key !== columnKey) return '⇅';
         return sortConfig.direction === 'ascending' ? '↑' : '↓';
     };
 
@@ -106,31 +117,22 @@ function AudioList() {
     }, [audios, searchTerm]);
 
     const sortedAudios = useMemo(() => {
-        let sortable = [...filteredAudios];
-        if (sortConfig !== null) {
-            sortable.sort((a, b) => {
-                const aValue = a[sortConfig.key];
-                const bValue = b[sortConfig.key];
-                if (aValue < bValue) {
-                    return sortConfig.direction === 'ascending' ? -1 : 1;
-                }
-                if (aValue > bValue) {
-                    return sortConfig.direction === 'ascending' ? 1 : -1;
-                }
-                return 0;
-            });
-        }
+        const sortable = [...filteredAudios];
+        sortable.sort((a, b) => {
+            const aValue = a[sortConfig.key];
+            const bValue = b[sortConfig.key];
+            if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
+            if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
+            return 0;
+        });
         return sortable;
     }, [filteredAudios, sortConfig]);
 
     const totalPages = Math.ceil(sortedAudios.length / ITEMS_PER_PAGE);
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    const paginatedAudios = sortedAudios.slice(startIndex, endIndex);
+    const paginatedAudios = sortedAudios.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
-    const getCountByNivel = (nivel) => {
-        return allAudios.filter(a => a.nivel === nivel).length;
-    };
+    const getCountByNivel = (nivel) => allAudios.filter(a => a.nivel === nivel).length;
 
     return (
         <div className="split-container">
@@ -198,8 +200,12 @@ function AudioList() {
                     ) : (
                         <EmptyState
                             icon="🎧"
-                            title={selectedNivel ? `No hay audios en ${selectedNivel}` : "No hay audios todavía"}
-                            description={selectedNivel ? `Comienza añadiendo audios de nivel ${selectedNivel}` : "Comienza añadiendo tu primer audio"}
+                            title={selectedNivel ? `No hay audios en ${selectedNivel}` : 'No hay audios todavía'}
+                            description={
+                                selectedNivel
+                                    ? `Comienza añadiendo audios de nivel ${selectedNivel}`
+                                    : 'Comienza añadiendo tu primer audio'
+                            }
                             actionText="+ Añadir primer audio"
                             onAction={() => setShowForm(true)}
                         />
@@ -224,9 +230,9 @@ function AudioList() {
                             {paginatedAudios.map(audio => (
                                 <tr key={audio.id}>
                                     <td>
-                                        <span className={`badge nivel-${audio.nivel.toLowerCase()}`}>
-                                            {audio.nivel}
-                                        </span>
+                                            <span className={`badge nivel-${audio.nivel.toLowerCase()}`}>
+                                                {audio.nivel}
+                                            </span>
                                     </td>
                                     <td className="pregunta-cell">{audio.pregunta}</td>
                                     <td className="audio-url">
@@ -245,7 +251,10 @@ function AudioList() {
                                         <button className="btn-edit" onClick={() => handleEdit(audio)}>
                                             Editar
                                         </button>
-                                        <button className="btn-delete" onClick={() => handleDelete(audio.id, audio.pregunta)}>
+                                        <button
+                                            className="btn-delete"
+                                            onClick={() => handleDeleteRequest(audio.id, audio.pregunta)}
+                                        >
                                             Eliminar
                                         </button>
                                     </td>
@@ -271,6 +280,17 @@ function AudioList() {
                     onClose={handleFormClose}
                 />
             )}
+
+            <ConfirmDialog
+                isOpen={confirmDialog.isOpen}
+                title="¿Eliminar audio?"
+                message={`¿Seguro que quieres eliminar "${confirmDialog.pregunta}"? Esta acción no se puede deshacer.`}
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                variant="danger"
+                onConfirm={handleDeleteConfirmed}
+                onCancel={handleDeleteCancelled}
+            />
         </div>
     );
 }

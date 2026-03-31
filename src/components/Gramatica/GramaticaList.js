@@ -2,11 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import GramaticaBulkImport from './GramaticaBulkImport';
-import GramaticaForm from "./GramaticaForm";
+import GramaticaForm from './GramaticaForm';
 import Pagination from '../common/Pagination';
 import EmptyState from '../common/EmptyState';
 import LoadingSkeleton from '../common/LoadingSkeleton';
 import { useToast } from '../common/Toast';
+import ConfirmDialog from '../common/ConfirmDialog';
 import './Gramatica.css';
 
 const NIVELES = ['A1', 'A2', 'B1', 'B2'];
@@ -23,6 +24,12 @@ function GramaticaList() {
     const [editingQuestion, setEditingQuestion] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [sortConfig, setSortConfig] = useState({ key: 'pregunta', direction: 'ascending' });
+
+    const [confirmDialog, setConfirmDialog] = useState({
+        isOpen: false,
+        questionId: null,
+        pregunta: '',
+    });
 
     const toast = useToast();
 
@@ -45,12 +52,9 @@ function GramaticaList() {
             });
             setAllQuestions(allData);
 
-            let displayData;
-            if (selectedNivel) {
-                displayData = allData.filter(q => q.nivel === selectedNivel);
-            } else {
-                displayData = allData;
-            }
+            const displayData = selectedNivel
+                ? allData.filter(q => q.nivel === selectedNivel)
+                : allData;
 
             setQuestions(displayData);
         } catch (error) {
@@ -61,17 +65,26 @@ function GramaticaList() {
         }
     };
 
-    const handleDelete = async (questionId, pregunta) => {
-        if (!window.confirm(`¿Eliminar "${pregunta}"?`)) return;
+    const handleDeleteRequest = (questionId, pregunta) => {
+        setConfirmDialog({ isOpen: true, questionId, pregunta });
+    };
+
+    const handleDeleteConfirmed = async () => {
+        const { questionId, pregunta } = confirmDialog;
+        setConfirmDialog({ isOpen: false, questionId: null, pregunta: '' });
 
         try {
             await deleteDoc(doc(db, 'grammar_questions', questionId));
-            toast.success('Pregunta eliminada');
+            toast.success(`"${pregunta}" eliminada`);
             loadQuestions();
         } catch (error) {
             console.error('Error:', error);
             toast.error('Error al eliminar');
         }
+    };
+
+    const handleDeleteCancelled = () => {
+        setConfirmDialog({ isOpen: false, questionId: null, pregunta: '' });
     };
 
     const handleEdit = (question) => {
@@ -91,17 +104,15 @@ function GramaticaList() {
     };
 
     const requestSort = (key) => {
-        let direction = 'ascending';
-        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-            direction = 'descending';
-        }
+        const direction =
+            sortConfig.key === key && sortConfig.direction === 'ascending'
+                ? 'descending'
+                : 'ascending';
         setSortConfig({ key, direction });
     };
 
     const getSortIcon = (columnKey) => {
-        if (sortConfig.key !== columnKey) {
-            return '⇅';
-        }
+        if (sortConfig.key !== columnKey) return '⇅';
         return sortConfig.direction === 'ascending' ? '↑' : '↓';
     };
 
@@ -112,37 +123,28 @@ function GramaticaList() {
     }, [questions, searchTerm]);
 
     const sortedQuestions = useMemo(() => {
-        let sortable = [...filteredQuestions];
-        if (sortConfig !== null) {
-            sortable.sort((a, b) => {
-                const aValue = a[sortConfig.key];
-                const bValue = b[sortConfig.key];
-                if (aValue < bValue) {
-                    return sortConfig.direction === 'ascending' ? -1 : 1;
-                }
-                if (aValue > bValue) {
-                    return sortConfig.direction === 'ascending' ? 1 : -1;
-                }
-                return 0;
-            });
-        }
+        const sortable = [...filteredQuestions];
+        sortable.sort((a, b) => {
+            const aValue = a[sortConfig.key];
+            const bValue = b[sortConfig.key];
+            if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
+            if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
+            return 0;
+        });
         return sortable;
     }, [filteredQuestions, sortConfig]);
 
     const totalPages = Math.ceil(sortedQuestions.length / ITEMS_PER_PAGE);
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    const paginatedQuestions = sortedQuestions.slice(startIndex, endIndex);
+    const paginatedQuestions = sortedQuestions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
-    const getCountByNivel = (nivel) => {
-        return allQuestions.filter(q => q.nivel === nivel).length;
-    };
+    const getCountByNivel = (nivel) => allQuestions.filter(q => q.nivel === nivel).length;
 
     const getTipoLabel = (tipo) => {
         const tipos = {
             'multiple_choice': 'Multiple Choice',
             'error_correction': 'Corrección',
-            'drag_drop': 'Ordenar'
+            'drag_drop': 'Ordenar',
         };
         return tipos[tipo] || tipo;
     };
@@ -218,8 +220,12 @@ function GramaticaList() {
                     ) : (
                         <EmptyState
                             icon="✏️"
-                            title={selectedNivel ? `No hay preguntas en ${selectedNivel}` : "No hay preguntas todavía"}
-                            description={selectedNivel ? `Comienza añadiendo preguntas de nivel ${selectedNivel}` : "Comienza añadiendo tu primera pregunta"}
+                            title={selectedNivel ? `No hay preguntas en ${selectedNivel}` : 'No hay preguntas todavía'}
+                            description={
+                                selectedNivel
+                                    ? `Comienza añadiendo preguntas de nivel ${selectedNivel}`
+                                    : 'Comienza añadiendo tu primera pregunta'
+                            }
                             actionText="+ Añadir primera pregunta"
                             onAction={() => setShowForm(true)}
                         />
@@ -246,14 +252,14 @@ function GramaticaList() {
                             {paginatedQuestions.map(q => (
                                 <tr key={q.id}>
                                     <td>
-                                        <span className={`badge nivel-${q.nivel.toLowerCase()}`}>
-                                            {q.nivel}
-                                        </span>
+                                            <span className={`badge nivel-${q.nivel.toLowerCase()}`}>
+                                                {q.nivel}
+                                            </span>
                                     </td>
                                     <td>
-                                        <span className="tipo-badge">
-                                            {getTipoLabel(q.tipo)}
-                                        </span>
+                                            <span className="tipo-badge">
+                                                {getTipoLabel(q.tipo)}
+                                            </span>
                                     </td>
                                     <td className="pregunta-cell">
                                         {q.pregunta}
@@ -270,7 +276,10 @@ function GramaticaList() {
                                         <button className="btn-edit" onClick={() => handleEdit(q)}>
                                             Editar
                                         </button>
-                                        <button className="btn-delete" onClick={() => handleDelete(q.id, q.pregunta)}>
+                                        <button
+                                            className="btn-delete"
+                                            onClick={() => handleDeleteRequest(q.id, q.pregunta)}
+                                        >
                                             Eliminar
                                         </button>
                                     </td>
@@ -301,6 +310,17 @@ function GramaticaList() {
                     onClose={handleBulkImportClose}
                 />
             )}
+
+            <ConfirmDialog
+                isOpen={confirmDialog.isOpen}
+                title="¿Eliminar pregunta?"
+                message={`¿Seguro que quieres eliminar "${confirmDialog.pregunta}"? Esta acción no se puede deshacer.`}
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                variant="danger"
+                onConfirm={handleDeleteConfirmed}
+                onCancel={handleDeleteCancelled}
+            />
         </div>
     );
 }

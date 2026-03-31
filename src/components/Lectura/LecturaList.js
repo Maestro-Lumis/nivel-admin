@@ -6,6 +6,7 @@ import Pagination from '../common/Pagination';
 import EmptyState from '../common/EmptyState';
 import LoadingSkeleton from '../common/LoadingSkeleton';
 import { useToast } from '../common/Toast';
+import ConfirmDialog from '../common/ConfirmDialog';
 import './Lectura.css';
 
 const NIVELES = ['A1', 'A2', 'B1', 'B2'];
@@ -21,6 +22,12 @@ function LecturaList() {
     const [editingLectura, setEditingLectura] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [sortConfig, setSortConfig] = useState({ key: 'pregunta', direction: 'ascending' });
+
+    const [confirmDialog, setConfirmDialog] = useState({
+        isOpen: false,
+        lecturaId: null,
+        pregunta: '',
+    });
 
     const toast = useToast();
 
@@ -43,12 +50,9 @@ function LecturaList() {
             });
             setAllLecturas(allData);
 
-            let displayData;
-            if (selectedNivel) {
-                displayData = allData.filter(l => l.nivel === selectedNivel);
-            } else {
-                displayData = allData;
-            }
+            const displayData = selectedNivel
+                ? allData.filter(l => l.nivel === selectedNivel)
+                : allData;
 
             setLecturas(displayData);
         } catch (error) {
@@ -59,17 +63,26 @@ function LecturaList() {
         }
     };
 
-    const handleDelete = async (lecturaId, pregunta) => {
-        if (!window.confirm(`¿Eliminar "${pregunta}"?`)) return;
+    const handleDeleteRequest = (lecturaId, pregunta) => {
+        setConfirmDialog({ isOpen: true, lecturaId, pregunta });
+    };
+
+    const handleDeleteConfirmed = async () => {
+        const { lecturaId, pregunta } = confirmDialog;
+        setConfirmDialog({ isOpen: false, lecturaId: null, pregunta: '' });
 
         try {
             await deleteDoc(doc(db, 'lectura', lecturaId));
-            toast.success('Lectura eliminada');
+            toast.success(`"${pregunta}" eliminada`);
             loadLecturas();
         } catch (error) {
             console.error('Error al eliminar:', error);
             toast.error('Error al eliminar');
         }
+    };
+
+    const handleDeleteCancelled = () => {
+        setConfirmDialog({ isOpen: false, lecturaId: null, pregunta: '' });
     };
 
     const handleEdit = (lectura) => {
@@ -84,17 +97,15 @@ function LecturaList() {
     };
 
     const requestSort = (key) => {
-        let direction = 'ascending';
-        if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-            direction = 'descending';
-        }
+        const direction =
+            sortConfig.key === key && sortConfig.direction === 'ascending'
+                ? 'descending'
+                : 'ascending';
         setSortConfig({ key, direction });
     };
 
     const getSortIcon = (columnKey) => {
-        if (sortConfig.key !== columnKey) {
-            return '⇅';
-        }
+        if (sortConfig.key !== columnKey) return '⇅';
         return sortConfig.direction === 'ascending' ? '↑' : '↓';
     };
 
@@ -106,31 +117,22 @@ function LecturaList() {
     }, [lecturas, searchTerm]);
 
     const sortedLecturas = useMemo(() => {
-        let sortable = [...filteredLecturas];
-        if (sortConfig !== null) {
-            sortable.sort((a, b) => {
-                const aValue = a[sortConfig.key];
-                const bValue = b[sortConfig.key];
-                if (aValue < bValue) {
-                    return sortConfig.direction === 'ascending' ? -1 : 1;
-                }
-                if (aValue > bValue) {
-                    return sortConfig.direction === 'ascending' ? 1 : -1;
-                }
-                return 0;
-            });
-        }
+        const sortable = [...filteredLecturas];
+        sortable.sort((a, b) => {
+            const aValue = a[sortConfig.key];
+            const bValue = b[sortConfig.key];
+            if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
+            if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
+            return 0;
+        });
         return sortable;
     }, [filteredLecturas, sortConfig]);
 
     const totalPages = Math.ceil(sortedLecturas.length / ITEMS_PER_PAGE);
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    const paginatedLecturas = sortedLecturas.slice(startIndex, endIndex);
+    const paginatedLecturas = sortedLecturas.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
-    const getCountByNivel = (nivel) => {
-        return allLecturas.filter(l => l.nivel === nivel).length;
-    };
+    const getCountByNivel = (nivel) => allLecturas.filter(l => l.nivel === nivel).length;
 
     return (
         <div className="split-container">
@@ -198,8 +200,12 @@ function LecturaList() {
                     ) : (
                         <EmptyState
                             icon="📖"
-                            title={selectedNivel ? `No hay lecturas en ${selectedNivel}` : "No hay lecturas todavía"}
-                            description={selectedNivel ? `Comienza añadiendo lecturas de nivel ${selectedNivel}` : "Comienza añadiendo tu primera lectura"}
+                            title={selectedNivel ? `No hay lecturas en ${selectedNivel}` : 'No hay lecturas todavía'}
+                            description={
+                                selectedNivel
+                                    ? `Comienza añadiendo lecturas de nivel ${selectedNivel}`
+                                    : 'Comienza añadiendo tu primera lectura'
+                            }
                             actionText="+ Añadir primera lectura"
                             onAction={() => setShowForm(true)}
                         />
@@ -224,9 +230,9 @@ function LecturaList() {
                             {paginatedLecturas.map(lectura => (
                                 <tr key={lectura.id}>
                                     <td>
-                                        <span className={`badge nivel-${lectura.nivel.toLowerCase()}`}>
-                                            {lectura.nivel}
-                                        </span>
+                                            <span className={`badge nivel-${lectura.nivel.toLowerCase()}`}>
+                                                {lectura.nivel}
+                                            </span>
                                     </td>
                                     <td className="pregunta-cell">{lectura.pregunta}</td>
                                     <td className="texto-preview">
@@ -239,7 +245,10 @@ function LecturaList() {
                                         <button className="btn-edit" onClick={() => handleEdit(lectura)}>
                                             Editar
                                         </button>
-                                        <button className="btn-delete" onClick={() => handleDelete(lectura.id, lectura.pregunta)}>
+                                        <button
+                                            className="btn-delete"
+                                            onClick={() => handleDeleteRequest(lectura.id, lectura.pregunta)}
+                                        >
                                             Eliminar
                                         </button>
                                     </td>
@@ -265,6 +274,17 @@ function LecturaList() {
                     onClose={handleFormClose}
                 />
             )}
+
+            <ConfirmDialog
+                isOpen={confirmDialog.isOpen}
+                title="¿Eliminar lectura?"
+                message={`¿Seguro que quieres eliminar "${confirmDialog.pregunta}"? Esta acción no se puede deshacer.`}
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                variant="danger"
+                onConfirm={handleDeleteConfirmed}
+                onCancel={handleDeleteCancelled}
+            />
         </div>
     );
 }
